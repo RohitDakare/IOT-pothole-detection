@@ -64,8 +64,8 @@ class SystemConfig:
     # Pin Configuration
     ultrasonic_trigger: int = 17
     ultrasonic_echo: int = 18
-    # Using UART5 Hardware Pins (GPIO 12/13)
-    lidar_port: str = "/dev/ttyAMA5" 
+    # Using UART4 Hardware Pins (GPIO 8/9) - Confirmed working in tests
+    lidar_port: str = "/dev/ttyAMA4" 
     lidar_tx: int = 12
     lidar_rx: int = 13
     gsm_tx: int = 16
@@ -257,10 +257,10 @@ class PotholeSystem:
         try:
             # Prioritize hardware port if defined, otherwise use Software Serial
             sensors['lidar'] = LiDAR(
-                port=getattr(self.config, 'lidar_port', "/dev/ttyAMA5"),
+                port=getattr(self.config, 'lidar_port', "/dev/ttyAMA4"),
                 baud=self.config.lidar_baud_rate
             )
-            self.logger.info(f"✓ LiDAR sensor initialized on {getattr(self.config, 'lidar_port', '/dev/ttyAMA5')}")
+            self.logger.info(f"✓ LiDAR sensor initialized on {getattr(self.config, 'lidar_port', '/dev/ttyAMA4')}")
         except Exception as e:
             self.logger.error(f"✗ LiDAR hardware initialization failed: {e}. Trying Software Serial...")
             try:

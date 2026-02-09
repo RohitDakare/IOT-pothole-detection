@@ -91,15 +91,24 @@ def test_lidar():
     print("====================================================")
     print("This test prioritizes hardware UARTs for stability.")
     print("""
---- Recommended Wiring (e.g., for UART5) ---""")
-    print("  - LiDAR Green (TX)  -> Pi Pin 33 (GPIO 13 / UART5_RX)")
-    print("  - LiDAR Yellow (RX) -> Pi Pin 32 (GPIO 12 / UART5_TX)")
-    print("  - Ensure 'dtoverlay=uart5' is in /boot/config.txt")
+--- Recommended Wiring (UART4 - Confirmed Working) ---""")
+    print("  - LiDAR Green (TX)  -> Pi Pin 21 (GPIO 9 / UART4_RX)")
+    print("  - LiDAR Yellow (RX) -> Pi Pin 24 (GPIO 8 / UART4_TX)")
+    print("  - LiDAR VCC (Red)   -> Pi Pin 2 or 4 (5V)")
+    print("  - LiDAR GND (Black) -> Pi GND (Any GND pin)")
+    print("  - Ensure 'dtoverlay=uart4' is in /boot/config.txt")
     print("----------------------------------------------------")
 
     # Baud rate for TF02-Pro is typically 115200
     baud_rate = 115200
-    ports_to_check = find_serial_ports()
+    
+    # Prioritize /dev/ttyAMA4 since tests confirmed LiDAR is connected there
+    all_ports = find_serial_ports()
+    # Move /dev/ttyAMA4 to the front if it exists
+    ports_to_check = []
+    if '/dev/ttyAMA4' in all_ports:
+        ports_to_check.append('/dev/ttyAMA4')
+    ports_to_check.extend([p for p in all_ports if p != '/dev/ttyAMA4'])
 
     if not ports_to_check:
         print("""
@@ -123,9 +132,12 @@ def test_lidar():
         print("""
    TROUBLESHOOTING:""")
         print("   1. WIRING: Verify LiDAR TX->Pi RX and LiDAR RX->Pi TX connections.")
-        print("   2. UART ENABLED: Ensure the correct UART is enabled in '/boot/config.txt' (e.g., 'dtoverlay=uart5').")
+        print("      - LiDAR Green (TX) -> GPIO 9 (Pin 21)")
+        print("      - LiDAR Yellow (RX) -> GPIO 8 (Pin 24)")
+        print("   2. UART ENABLED: Ensure 'dtoverlay=uart4' is in '/boot/config.txt'.")
         print("   3. POWER: LiDAR requires a stable 5V supply and a common GND with the Pi.")
         print("   4. BAUD RATE: Confirm the sensor is configured for 115200 baud.")
+        print("   5. PERMISSIONS: Try 'sudo chmod 666 /dev/ttyAMA4' if permission denied.")
     print("====================================================")
 
 if __name__ == "__main__":
