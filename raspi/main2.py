@@ -19,6 +19,8 @@ import time
 import threading
 import logging
 import sqlite3
+import requests
+import uuid
 import logging.handlers
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -238,6 +240,15 @@ class PotholeSystem:
         self.motors = self._init_motors()
         self.ml_model = self._init_ml_model()
         
+        # Road Profile Buffering
+        self.road_buffer = []
+        self.session_id = str(uuid.uuid4())
+        self.road_buffer_lock = threading.Lock()
+        
+        # Start background uploader
+        threading.Thread(target=self._upload_road_profile_loop, daemon=True).start()
+        self._init_local_db() # Ensure local DB is ready
+
         self.logger.info("System initialization complete")
 
     def _init_sensors(self) -> Dict[str, Any]:
@@ -642,19 +653,47 @@ class PotholeSystem:
             self.logger.error(f"Failed to init local DB: {e}")
 
     def _log_raw_lidar(self, distance_cm: float):
-        """Log raw LiDAR reading to local SQLite database."""
+        """Log raw LiDAR reading to local SQLite and buffer for upload."""
+        ts = time.time()
+        
+        # 1. Local DB
         try:
             conn = sqlite3.connect('lidar_log.db')
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO raw_lidar (timestamp, distance_cm) VALUES (?, ?)",
-                (time.time(), distance_cm)
+                (ts, distance_cm)
             )
             conn.commit()
             conn.close()
-        except Exception as e:
-            # Silent fail to avoid spamming logs
-            pass
+        except: pass
+
+        # 2. Buffer for Upload
+        try:
+            with self.road_buffer_lock:
+                self.road_buffer.append({'x': 0.0, 'y': distance_cm, 'z': ts})
+        except: pass
+
+    def _upload_road_profile_loop(self):
+        """Background thread to upload road profile."""
+        url = "http://195.35.23.26/api/road-profile" # Or localhost for dev
+        while not self._shutdown_event.is_set():
+            time.sleep(1.0) # 1Hz upload
+            
+            batch = []
+            with self.road_buffer_lock:
+                if self.road_buffer:
+                    batch = list(self.road_buffer)
+                    self.road_buffer.clear()
+            
+            if batch:
+                try:
+                    requests.post(url, json={
+                        "session_id": self.session_id,
+                        "points": batch
+                    }, timeout=2)
+                except:
+                    pass
 
     def _calculate_severity(self, depth: float) -> str:
         """

@@ -279,19 +279,46 @@ async def save_road_profile(data: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/road-profile")
-async def get_latest_profile():
+class RoadProfile(BaseModel):
+    session_id: str
+    points: List[Dict[str, float]]  # List of {x, y, z}
+
+@app.post("/api/road-profile")
+async def upload_road_profile(data: RoadProfile):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT points_json FROM road_profiles ORDER BY id DESC LIMIT 1")
-        row = cursor.fetchone()
+        cursor.execute("INSERT INTO road_profiles (session_id, points_json) VALUES (?, ?)", 
+                      (data.session_id, json.dumps(data.points)))
+        conn.commit()
         conn.close()
-        if row:
-            return json.loads(row["points_json"])
-        return []
+        return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/road-profile")
+async def get_road_profile():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # Get last 10 batches of points (approx 10-20 seconds of data)
+        cursor.execute("SELECT points_json FROM road_profiles ORDER BY id DESC LIMIT 10")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        all_points = []
+        for row in rows:
+            try:
+                points = json.loads(row['points_json'])
+                # Just append if it's a list
+                if isinstance(points, list):
+                    all_points.extend(points)
+            except: pass
+            
+        return all_points
+    except Exception as e:
+        print(f"Error fetching profile: {e}")
+        return []
 
 @app.get("/api/potholes")
 async def get_potholes():
