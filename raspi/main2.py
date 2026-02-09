@@ -405,7 +405,7 @@ class PotholeSystem:
         self.logger.info("Bluetooth control thread stopped")
 
     def detection_loop(self):
-        """The main loop for detecting potholes with improved logic."""
+        """The main loop for detecting potholes with baseline tracking."""
         self.logger.info("Detection loop started")
         
         if not self.sensors.get('lidar'):
@@ -417,41 +417,77 @@ class PotholeSystem:
         in_pothole_event = False
         loop_count = 0
         
+        # Baseline tracking - use rolling window to establish road surface
+        baseline_window = []
+        baseline_window_size = 20  # Use last 20 readings for baseline
+        baseline_distance = None
+        
+        self.logger.info("Establishing baseline... collecting initial readings")
+        
         while not self._shutdown_event.is_set():
             try:
-                # Get LiDAR reading
-                lidar_depth_m = self.sensors['lidar'].get_distance()
+                # Get LiDAR reading (absolute distance to surface)
+                lidar_distance_m = self.sensors['lidar'].get_distance()
                 
-                if lidar_depth_m is None:
+                if lidar_distance_m is None:
                     self.logger.warning("LiDAR returned None, skipping sample")
                     time.sleep(self.config.sampling_rate)
                     continue
                 
-                lidar_depth = lidar_depth_m * 100  # m to cm
+                lidar_distance_cm = lidar_distance_m * 100  # m to cm
                 
                 # Log raw data to the secondary database for Surroundings/3D Mapping
                 if self.config.enable_raw_lidar_logging:
-                    self._log_raw_lidar(lidar_depth)
+                    self._log_raw_lidar(lidar_distance_cm)
+                
+                # Update baseline using rolling window (when not in pothole event)
+                if not in_pothole_event:
+                    baseline_window.append(lidar_distance_cm)
+                    if len(baseline_window) > baseline_window_size:
+                        baseline_window.pop(0)
+                    
+                    # Calculate baseline as minimum of window (road surface)
+                    if len(baseline_window) >= 5:
+                        baseline_distance = min(baseline_window)
+                
+                # Calculate actual depth (how much deeper than baseline)
+                if baseline_distance is not None:
+                    # Depth = current reading - baseline
+                    # Positive depth means pothole (further from sensor)
+                    depth = lidar_distance_cm - baseline_distance
+                else:
+                    # Still establishing baseline
+                    depth = 0
                 
                 # Log periodic status
                 loop_count += 1
                 if loop_count % 200 == 0:  # Every 10 seconds at 20Hz
-                    self.logger.debug(f"Status: LiDAR={lidar_depth:.2f}cm, Events={self.stats['detections']}")
+                    self.logger.info(
+                        f"Status: Distance={lidar_distance_cm:.2f}cm, "
+                        f"Baseline={baseline_distance:.2f}cm if baseline_distance else 'N/A', "
+                        f"Depth={depth:.2f}cm, Events={self.stats['detections']}"
+                    )
                 
-                # Pothole detection logic
-                if lidar_depth > self.config.pothole_threshold:
+                # Pothole detection logic - check if depth exceeds threshold
+                if depth > self.config.pothole_threshold:
                     if not in_pothole_event:
                         in_pothole_event = True
                         event_start_time = time.time()
-                        self.logger.debug(f"Pothole event started (depth: {lidar_depth:.2f}cm)")
+                        self.logger.info(
+                            f"Pothole event started: depth={depth:.2f}cm, "
+                            f"distance={lidar_distance_cm:.2f}cm, baseline={baseline_distance:.2f}cm"
+                        )
                     
-                    event_readings.append(lidar_depth)
+                    # Store the DEPTH, not absolute distance
+                    event_readings.append(depth)
                     
                 elif in_pothole_event:
                     # Event ended
                     in_pothole_event = False
                     duration = time.time() - event_start_time
-                    self.logger.debug(f"Pothole event ended (duration: {duration:.2f}s, samples: {len(event_readings)})")
+                    self.logger.info(
+                        f"Pothole event ended: duration={duration:.2f}s, samples={len(event_readings)}"
+                    )
                     
                     self._handle_pothole_event(event_readings, event_start_time)
                     event_readings = []
@@ -530,26 +566,33 @@ class PotholeSystem:
             volume = 0
             confidence = 0.5
         
-        # ML Classification
-        if not self.ml_model:
-            self.logger.warning("ML model not available, skipping classification")
-            return
+        # ML Classification (optional - don't block on this)
+        classification = "pothole"  # Default classification
         
-        try:
-            classification = self.ml_model.classify_event(readings, duration)
-            self.logger.info(f"ML Classification: {classification}")
-        except Exception as e:
-            self.logger.error(f"ML classification failed: {e}")
-            return
+        if self.ml_model:
+            try:
+                ml_classification = self.ml_model.classify_event(readings, duration)
+                self.logger.info(f"ML Classification: {ml_classification}")
+                
+                # Only use ML classification if it's confident (not "Unknown")
+                if ml_classification and ml_classification.lower() != "unknown":
+                    classification = ml_classification
+                    
+                    # Check if ML says it's NOT a pothole
+                    if "pothole" not in classification.lower():
+                        self.logger.info(f"ML rejected as pothole: {classification}")
+                        with self._lock:
+                            self.stats['false_positives'] += 1
+                        return
+                else:
+                    self.logger.info("ML returned Unknown - using depth-based detection")
+                    
+            except Exception as e:
+                self.logger.warning(f"ML classification failed: {e}, proceeding with depth-based detection")
+        else:
+            self.logger.debug("ML model not available, using depth-based detection only")
         
-        # Check if it's a pothole
-        if "pothole" not in classification.lower():
-            self.logger.info(f"Not a pothole: {classification}")
-            with self._lock:
-                self.stats['false_positives'] += 1
-            return
-        
-        # Confirmed pothole
+        # Confirmed pothole (either by ML or by depth threshold)
         with self._lock:
             self.stats['detections'] += 1
         
