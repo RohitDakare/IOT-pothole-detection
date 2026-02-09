@@ -7,8 +7,9 @@ from datetime import datetime
 import sqlite3
 import os
 import uuid
+import json
 from geopy.geocoders import Nominatim
-from typing import List
+from typing import List, Dict, Any
 
 app = FastAPI(title="Smart Pothole Detection API (SQLite Mode)")
 
@@ -52,6 +53,17 @@ def init_db():
         repaired_at TIMESTAMP NULL
     )
     """)
+
+    # High-density road data for 3D mapping
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS road_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
+        points_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    conn.commit()
     
     # Attempt migration for existing databases
     try:
@@ -216,6 +228,40 @@ async def upload_lidar_scan(pothole_id: int, file: UploadFile = File(...)):
         conn.close()
         
         return {"status": "success", "url": lidar_scan_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/potholes/stats")
+async def get_pothole_stats():
+    # ... existing stats logic ...
+    return {"total": 0} # Placeholder
+
+@app.post("/api/road-profile")
+async def save_road_profile(data: Dict[str, Any]):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO road_profiles (session_id, points_json) VALUES (?, ?)",
+            (data.get("session_id", "default"), json.dumps(data.get("points", [])))
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/road-profile")
+async def get_latest_profile():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT points_json FROM road_profiles ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return json.loads(row["points_json"])
+        return []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
