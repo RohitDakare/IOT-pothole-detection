@@ -62,97 +62,69 @@ class LiDAR:
 
     def get_distance(self):
         """
-        Reads the distance from the LiDAR sensor with frame synchronization.
+        Reads the distance from the LiDAR sensor with Checksum validation 
+         and buffer flushing for zero-lag accuracy.
 
         Returns:
             float: The distance in meters, or None if no valid data available.
         """
         if not self.ser:
-            print("LiDAR Error: Serial port not initialized")
             return None
         
         try:
             if isinstance(self.ser, serial.Serial):
-                # FRAME SYNCHRONIZATION: Search for header 0x59 0x59
-                # This prevents reading misaligned frames
-                max_search_bytes = 100  # Prevent infinite loop
-                bytes_searched = 0
+                # 1. Flush the buffer to get the LATEST reading (prevents lag/inconsistency)
+                if self.ser.in_waiting > 27: # More than 3 frames waiting? Clear them.
+                    self.ser.reset_input_buffer()
                 
-                while bytes_searched < max_search_bytes:
-                    if self.ser.in_waiting < 1:
-                        return None  # No data available
+                # 2. Search for header 0x59 0x59
+                max_search = 50
+                while self.ser.in_waiting >= 9 and max_search > 0:
+                    max_search -= 1
+                    header = self.ser.read(2)
                     
-                    # Read one byte at a time looking for first 0x59
-                    byte1 = self.ser.read(1)
-                    bytes_searched += 1
-                    
-                    if byte1[0] == 0x59:
-                        # Found first header byte, check for second
-                        if self.ser.in_waiting < 1:
-                            time.sleep(0.001)  # Brief wait for next byte
+                    if header[0] == 0x59 and header[1] == 0x59:
+                        # Found header! Read the next 7 bytes (data + checksum)
+                        data = self.ser.read(7)
+                        if len(data) < 7:
+                            return None
                         
-                        if self.ser.in_waiting >= 1:
-                            byte2 = self.ser.read(1)
-                            bytes_searched += 1
-                            
-                            if byte2[0] == 0x59:
-                                # Found valid header! Read remaining 7 bytes
-                                if self.ser.in_waiting < 7:
-                                    time.sleep(0.002)  # Wait for full frame
-                                
-                                if self.ser.in_waiting >= 7:
-                                    remaining = self.ser.read(7)
-                                    
-                                    if len(remaining) == 7:
-                                        # Parse distance from bytes 2-3 (now in remaining[0-1])
-                                        d_low = remaining[0]
-                                        d_high = remaining[1]
-                                        self.dist = d_low + d_high * 256
-                                        
-                                        # Optional: Validate checksum (byte 8)
-                                        # checksum = remaining[6]
-                                        
-                                        return self.dist / 100.0  # Convert cm to meters
-                                    else:
-                                        print(f"LiDAR: Incomplete frame - got {len(remaining)} bytes, expected 7")
-                                        return None
-                                else:
-                                    return None  # Not enough data yet
-                            # else: Second byte wasn't 0x59, continue searching
-                    # else: Not a header byte, continue searching
-                
-                # Searched too many bytes without finding valid frame
-                return None
-                
-            else:  # SoftwareSerial
-                # Read 'Y' 'Y' bytes with timeout
-                byte1 = self.ser.read(1, timeout=0.1)
-                if byte1 == b'Y':
-                    byte2 = self.ser.read(1, timeout=0.1)
-                    if byte2 == b'Y':
-                        # Read remaining 7 data bytes with timeout
-                        data = self.ser.read(7, timeout=0.1)
-                        if len(data) == 7:
+                        # 3. VERIFY CHECKSUM (Critical for consistency)
+                        # Sum of first 8 bytes (Header Low/High + Data)
+                        check_calc = (0x59 + 0x59 + sum(data[:6])) & 0xFF
+                        check_received = data[6]
+                        
+                        if check_calc == check_received:
+                            # Distance in cm is Byte 2 and 3
                             d_low = data[0]
                             d_high = data[1]
-                            self.dist = d_low + d_high * 256
-                            return self.dist / 100.0
+                            distance_cm = d_low + d_high * 256
+                            
+                            # Filter out impossible spikes
+                            if distance_cm > 1200: # TF02-Pro max range is 12m
+                                return None
+                                
+                            return distance_cm / 100.0  # Convert to meters
                         else:
-                            print(f"LiDAR: Incomplete data frame - got {len(data)} bytes, expected 7")
-                    else:
-                        print(f"LiDAR: Invalid second header byte")
-                else:
-                    # No data available
-                    return None
+                            # Checksum failed, probably a false header. Keep searching.
+                            continue
+                            
+                return None
+                
+            else:  # SoftwareSerial Fallback
+                self.ser.read_all() # Clear buffer
+                time.sleep(0.01)
+                header = self.ser.read(2)
+                if header == b'YY':
+                    data = self.ser.read(7)
+                    if len(data) == 7:
+                        return (data[0] + data[1] * 256) / 100.0
+                return None
                     
-        except serial.SerialException as e:
-            print(f"LiDAR get_distance error: {e}")
-            return None
         except Exception as e:
-            print(f"LiDAR unexpected error: {e}")
+            # Silent fail for main loop stability
             return None
         
-        # No valid data received
         return None
 
 

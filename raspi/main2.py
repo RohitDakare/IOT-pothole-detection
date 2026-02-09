@@ -430,66 +430,68 @@ class PotholeSystem:
                 lidar_distance_m = self.sensors['lidar'].get_distance()
                 
                 if lidar_distance_m is None:
-                    self.logger.warning("LiDAR returned None, skipping sample")
+                    # Ignore occasional None results
                     time.sleep(self.config.sampling_rate)
                     continue
                 
                 lidar_distance_cm = lidar_distance_m * 100  # m to cm
                 
-                # Log raw data to the secondary database for Surroundings/3D Mapping
+                # OUTLIER REJECTION: Ignore readings that are physically impossible
+                # or represent massive sudden jumps (e.g. > 500cm jump in 0.05s)
+                if baseline_distance is not None:
+                    if abs(lidar_distance_cm - baseline_distance) > 500:
+                        self.logger.warning(f"Discarding spike: {lidar_distance_cm:.2f}cm")
+                        continue
+
+                # Log raw data to the secondary database
                 if self.config.enable_raw_lidar_logging:
                     self._log_raw_lidar(lidar_distance_cm)
                 
-                # Update baseline using rolling window (when not in pothole event)
+                # Update baseline using median of window (more robust than min)
                 if not in_pothole_event:
                     baseline_window.append(lidar_distance_cm)
                     if len(baseline_window) > baseline_window_size:
                         baseline_window.pop(0)
                     
-                    # Calculate baseline as minimum of window (road surface)
-                    if len(baseline_window) >= 5:
-                        baseline_distance = min(baseline_window)
+                    if len(baseline_window) >= 10:
+                        # Use Median to ignore single-frame errors
+                        baseline_distance = sorted(baseline_window)[len(baseline_window)//2]
                 
-                # Calculate actual depth (how much deeper than baseline)
+                # Calculate actual depth
+                depth = 0
                 if baseline_distance is not None:
-                    # Depth = current reading - baseline
-                    # Positive depth means pothole (further from sensor)
                     depth = lidar_distance_cm - baseline_distance
-                else:
-                    # Still establishing baseline
-                    depth = 0
                 
                 # Log periodic status
                 loop_count += 1
-                if loop_count % 200 == 0:  # Every 10 seconds at 20Hz
+                if loop_count % 100 == 0: 
                     self.logger.info(
-                        f"Status: Distance={lidar_distance_cm:.2f}cm, "
-                        f"Baseline={baseline_distance:.2f}cm if baseline_distance else 'N/A', "
-                        f"Depth={depth:.2f}cm, Events={self.stats['detections']}"
+                        f"Status: Dist={lidar_distance_cm:.2f}cm, "
+                        f"Base={baseline_distance:.2f}cm, "
+                        f"Depth={depth:.2f}cm"
                     )
                 
-                # Pothole detection logic - check if depth exceeds threshold
+                # Pothole detection logic
                 if depth > self.config.pothole_threshold:
                     if not in_pothole_event:
                         in_pothole_event = True
                         event_start_time = time.time()
-                        self.logger.info(
-                            f"Pothole event started: depth={depth:.2f}cm, "
-                            f"distance={lidar_distance_cm:.2f}cm, baseline={baseline_distance:.2f}cm"
-                        )
+                        self.logger.info(f"START: depth={depth:.2f}cm")
                     
-                    # Store the DEPTH, not absolute distance
                     event_readings.append(depth)
                     
                 elif in_pothole_event:
                     # Event ended
                     in_pothole_event = False
                     duration = time.time() - event_start_time
-                    self.logger.info(
-                        f"Pothole event ended: duration={duration:.2f}s, samples={len(event_readings)}"
-                    )
                     
-                    self._handle_pothole_event(event_readings, event_start_time)
+                    # IGNORE NOISE: Potholes aren't 1cm long (single sample noise)
+                    if len(event_readings) >= 3:
+                        self.logger.info(f"END: duration={duration:.2f}s, samples={len(event_readings)}")
+                        self._handle_pothole_event(event_readings, event_start_time)
+                    else:
+                        self.logger.debug("Discarded short event (possible noise)")
+                    
                     event_readings = []
                 
                 time.sleep(self.config.sampling_rate)
