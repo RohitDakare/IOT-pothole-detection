@@ -14,13 +14,12 @@ fi
 echo "Updating $CONFIG_FILE configuration..."
 
 # 1. Enable UART0 (Primary UART for GPS on GPIO 14/15)
-# This is usually enabled by default on Pi 4, but let's ensure it.
 grep -q "enable_uart=1" $CONFIG_FILE || echo "enable_uart=1" | sudo tee -a $CONFIG_FILE
 
-# 2. Disable conflicting overlays if present (optional but recommended)
-# We comment them out if they exist to free up GPIOs 0-13 for general use
-# sed -i 's/^dtoverlay=uart[2-5]/#dtoverlay=uart&/' $CONFIG_FILE
+# 2. Enable UART5 (Hardware UART for LiDAR on GPIO 12/13)
+# This is much more stable than Software Serial
+grep -q "dtoverlay=uart5" $CONFIG_FILE || echo "dtoverlay=uart5" | sudo tee -a $CONFIG_FILE
 
-echo "Configuration updated for UART0."
-echo "If you have changed overlays, you MUST reboot."
+echo "Configuration updated for UART0 and UART5."
+echo "If you have changed overlays, you MUST reboot for changes to take effect."
 echo "sudo reboot"

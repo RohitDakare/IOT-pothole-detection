@@ -213,6 +213,8 @@
         <div class="pothole-meta">
             <p><strong>Coordinates:</strong> <span id="detailCoords"></span></p>
             <p><strong>Depth:</strong> <span id="detailDepth"></span> cm</p>
+            <p><strong>Length:</strong> <span id="detailLength"></span> cm</p>
+            <p><strong>Width:</strong> <span id="detailWidth"></span> cm</p>
             <p><strong>Detected At:</strong> <span id="detailTime"></span></p>
             <p><strong>Status:</strong> <span id="detailStatus"></span></p>
         </div>
@@ -239,6 +241,8 @@
                     lat: parseFloat(p.latitude),
                     lon: parseFloat(p.longitude),
                     depth: p.depth,
+                    length: p.length,
+                    width: p.width,
                     severity: p.severity_level,
                     status: p.status,
                     time: new Date(p.detected_at).toLocaleString(),
@@ -285,6 +289,8 @@
             document.getElementById('detailSeverity').innerText = `${p.severity} Pothole`;
             document.getElementById('detailCoords').innerText = `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`;
             document.getElementById('detailDepth').innerText = p.depth;
+            document.getElementById('detailLength').innerText = p.length;
+            document.getElementById('detailWidth').innerText = p.width;
             document.getElementById('detailTime').innerText = p.time;
             document.getElementById('detailStatus').innerText = p.status;
             document.getElementById('detailImage').src = p.img;

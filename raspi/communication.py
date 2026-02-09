@@ -12,7 +12,7 @@ class GSM:
     A class to interact with the SIM800L GSM module.
     """
 
-    def __init__(self, port=None, tx=None, rx=None, baud=9600):
+    def __init__(self, port=None, tx=None, rx=None, baud=9600, server_url="http://195.35.23.26"):
         """
         Initializes the GSM module.
 
@@ -21,9 +21,11 @@ class GSM:
             tx (int, optional): The TX pin for software serial. Defaults to None.
             rx (int, optional): The RX pin for software serial. Defaults to None.
             baud (int, optional): The baud rate. Defaults to 9600.
+            server_url (str, optional): Backend server base URL.
         """
         self.ser = None
         self.baud = baud
+        self.server_url = server_url.rstrip('/')
 
         if port:
             try:
@@ -93,7 +95,7 @@ class GSM:
         json_data = json.dumps(data)
         self.send_at("AT+HTTPINIT")
         self.send_at("AT+HTTPPARA=\"CID\",1")
-        self.send_at("AT+HTTPPARA=\"URL\",\"http://195.35.23.26/api/potholes\"")
+        self.send_at(f"AT+HTTPPARA=\"URL\",\"{self.server_url}/api/potholes\"")
         self.send_at("AT+HTTPPARA=\"CONTENT\",\"application/json\"")
 
         self.send_at(f"AT+HTTPDATA={len(json_data)},10000", wait=0.5)

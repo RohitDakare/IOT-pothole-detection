@@ -15,12 +15,14 @@ def simulate_real_detection():
     ]
 
     for det in detections:
+        length = random.uniform(20.0, 50.0)
+        width = length * 0.85
         data = {
             "latitude": det["lat"],
             "longitude": det["lon"],
             "depth": det["depth"],
-            "length": random.uniform(20.0, 50.0),
-            "width": 0.0,
+            "length": length,
+            "width": width,
             "severity": det["severity"],
             "classification": det[ "classification"],
             "timestamp": time.time()

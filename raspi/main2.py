@@ -53,18 +53,21 @@ class SystemConfig:
     severity_critical: tuple = (7, 100)
     
     # Hardware Configuration
-    lidar_baud_rate: int = 9600
+    lidar_baud_rate: int = 115200  # Default for TF02-Pro
     bluetooth_baud_rate: int = 9600
     
-    # WiFi Configuration
+    # WiFi and Server Configuration
     wifi_ssid: str = "TP-Link_2CF7"
     wifi_password: str = "Tp@16121991"
+    backend_url: str = "http://195.35.23.26"
     
     # Pin Configuration
     ultrasonic_trigger: int = 17
     ultrasonic_echo: int = 18
+    # Using UART5 Hardware Pins (GPIO 12/13)
+    lidar_port: str = "/dev/ttyAMA5" 
     lidar_tx: int = 12
-    lidar_rx: int = 6
+    lidar_rx: int = 13
     gsm_tx: int = 16
     gsm_rx: int = 20
     camera_tx: int = 23
@@ -82,6 +85,8 @@ class SystemConfig:
     model_path: str = 'sensor_ml_model/pothole_sensor_model.pkl'
     require_ml_model: bool = True
     require_gps_fix: bool = True
+    enable_raw_lidar_logging: bool = True
+    raw_lidar_db: str = "lidar_readings.db"
     
     # Bluetooth Fallback Ports
     bluetooth_fallback_ports: list = None
@@ -250,15 +255,24 @@ class PotholeSystem:
             sensors['gps'] = None
         
         try:
+            # Prioritize hardware port if defined, otherwise use Software Serial
             sensors['lidar'] = LiDAR(
-                tx=self.config.lidar_tx,
-                rx=self.config.lidar_rx,
+                port=getattr(self.config, 'lidar_port', "/dev/ttyAMA5"),
                 baud=self.config.lidar_baud_rate
             )
-            self.logger.info("✓ LiDAR sensor initialized")
+            self.logger.info(f"✓ LiDAR sensor initialized on {getattr(self.config, 'lidar_port', '/dev/ttyAMA5')}")
         except Exception as e:
-            self.logger.error(f"✗ LiDAR sensor failed: {e}")
-            sensors['lidar'] = None
+            self.logger.error(f"✗ LiDAR hardware initialization failed: {e}. Trying Software Serial...")
+            try:
+                sensors['lidar'] = LiDAR(
+                    tx=self.config.lidar_tx,
+                    rx=self.config.lidar_rx,
+                    baud=self.config.lidar_baud_rate
+                )
+                self.logger.info("✓ LiDAR sensor initialized via Software Serial")
+            except Exception as se:
+                self.logger.error(f"✗ LiDAR software initialization also failed: {se}")
+                sensors['lidar'] = None
         
         return sensors
 
@@ -271,9 +285,10 @@ class PotholeSystem:
         try:
             comms['gsm'] = GSM(
                 tx=self.config.gsm_tx,
-                rx=self.config.gsm_rx
+                rx=self.config.gsm_rx,
+                server_url=self.config.backend_url
             )
-            self.logger.info("✓ GSM module initialized")
+            self.logger.info(f"✓ GSM module initialized for {self.config.backend_url}")
         except Exception as e:
             self.logger.error(f"✗ GSM module failed: {e}")
             comms['gsm'] = None
@@ -428,6 +443,10 @@ class PotholeSystem:
                     
                     event_readings.append(lidar_depth)
                     
+                    # Log raw data to the secondary database if enabled
+                    if self.config.enable_raw_lidar_logging:
+                        self._log_raw_lidar(lidar_depth)
+                    
                 elif in_pothole_event:
                     # Event ended
                     in_pothole_event = False
@@ -467,12 +486,19 @@ class PotholeSystem:
         # Calculate statistics
         max_depth = max(readings)
         avg_depth = sum(readings) / len(readings)
+        
+        # Length calculation: Speed (cm/s) * Duration (s)
+        # Using estimated_speed from config (e.g., 20 cm/s for real robot)
         length = duration * self.config.estimated_speed
         
+        # Width calculation: 
+        # Since we have a point LiDAR, we estimate width based on length (heuristic)
+        # Typically potholes are 70-90% as wide as they are long.
+        width = length * 0.85 
+        
         self.logger.info(
-            f"Processing event: max_depth={max_depth:.2f}cm, "
-            f"avg_depth={avg_depth:.2f}cm, length={length:.2f}cm, "
-            f"samples={len(readings)}"
+            f"Processing event: Depth={max_depth:.2f}cm, "
+            f"Length={length:.2f}cm, Width={width:.2f}cm"
         )
         
         # ML Classification
@@ -506,6 +532,7 @@ class PotholeSystem:
         self.logger.info(f"  Max Depth: {max_depth:.2f} cm")
         self.logger.info(f"  Avg Depth: {avg_depth:.2f} cm")
         self.logger.info(f"  Estimated Length: {length:.2f} cm")
+        self.logger.info(f"  Estimated Width: {width:.2f} cm")
         self.logger.info(f"  Classification: {classification}")
         self.logger.info("=" * 60)
         
@@ -533,7 +560,7 @@ class PotholeSystem:
             "depth": round(max_depth, 2),
             "avg_depth": round(avg_depth, 2),
             "length": round(length, 2),
-            "width": 0.0,
+            "width": round(width, 2),
             "severity": severity,
             "classification": classification,
             "timestamp": datetime.now().isoformat(),
@@ -613,6 +640,18 @@ class PotholeSystem:
         self.logger.info(f"Errors: {self.stats['errors']}")
         self.logger.info(f"Detection Rate: {self.stats['detections']/hours:.2f} per hour")
         self.logger.info("=" * 60)
+
+    def _log_raw_lidar(self, depth):
+        """Saves a single point to the secondary high-speed database."""
+        try:
+            if not hasattr(self, '_raw_db_conn'):
+                self._raw_db_conn = sqlite3.connect(self.config.raw_lidar_db, check_same_thread=False)
+                self._raw_db_cursor = self._raw_db_conn.cursor()
+                self._raw_db_cursor.execute("CREATE TABLE IF NOT EXISTS raw_data (timestamp REAL, depth REAL)")
+            
+            self._raw_db_cursor.execute("INSERT INTO raw_data VALUES (?, ?)", (time.time(), depth))
+            self._raw_db_conn.commit()
+        except: pass
 
     def run(self):
         """Starts the pothole detection system with proper thread management."""
