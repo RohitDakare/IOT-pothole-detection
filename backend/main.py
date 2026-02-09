@@ -102,26 +102,29 @@ class PotholeData(BaseModel):
     depth: float
     length: float = 0.0
     width: float = 0.0
-    volume: float = 0.0  # Added volume
+    volume: float = 0.0
+    profile: List[float] = []  # Raw depth points
     severity: str
-    timestamp: str  # Changed to str to accept ISO format
+    timestamp: str 
 
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row 
     return conn
 
-# Ensure volume column exists
-def check_volume_column():
+# Ensure new columns exist
+def upgrade_db_schema():
     conn = get_db_connection()
     try:
         conn.execute("ALTER TABLE potholes ADD COLUMN volume REAL DEFAULT 0")
-        conn.commit()
-    except:
-        pass
+    except: pass
+    try:
+        conn.execute("ALTER TABLE potholes ADD COLUMN profile_data TEXT DEFAULT '[]'")
+    except: pass
+    conn.commit()
     conn.close()
 
-check_volume_column()
+upgrade_db_schema()
 
 @app.post("/api/potholes")
 async def report_pothole(data: PotholeData):
@@ -158,10 +161,10 @@ async def report_pothole(data: PotholeData):
                 conn.close()
                 return {"status": "repaired", "id": existing['id']}
             
-        # 3. Insert New Pothole with Dimensions & Volume
+        # 3. Insert New Pothole with Profile Data
         query = """
-        INSERT INTO potholes (latitude, longitude, depth, length, width, volume, severity_level, status, detected_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO potholes (latitude, longitude, depth, length, width, volume, profile_data, severity_level, status, detected_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         # Parse timestamp string to datetime object if needed, or store as is if SQLite handles it
         # Ideally, we convert ISO string back to datetime for storage consistency
@@ -177,6 +180,7 @@ async def report_pothole(data: PotholeData):
             data.length, 
             data.width,
             data.volume,
+            json.dumps(data.profile), # Serialize profile list
             new_severity, 
             new_status,
             dt_object

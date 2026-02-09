@@ -18,7 +18,15 @@ import sys
 import time
 import threading
 import logging
+import sqlite3
 import logging.handlers
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from pathlib import Path
+import json
+from datetime import datetime
+import serial
+from RPi import GPIO
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -560,7 +568,8 @@ class PotholeSystem:
             },
             "timestamp": datetime.now().isoformat(),
             "gps_fixed": coords['fixed'],
-            "3d_view": True  # Flag for dashboard
+            "3d_view": True,
+            "profile": [round(x, 1) for x in readings]  # Raw depth profile for 3D plotting
         }
 
         # 3a. Classification (Non-blocking)
@@ -614,6 +623,38 @@ class PotholeSystem:
         except Exception as e:
             self.logger.error(f"GPS error: {e}")
             return None
+
+    def _init_local_db(self):
+        """Initialize local SQLite database for raw logging."""
+        try:
+            conn = sqlite3.connect('lidar_log.db')
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS raw_lidar (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL,
+                    distance_cm REAL
+                )
+            ''')
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            self.logger.error(f"Failed to init local DB: {e}")
+
+    def _log_raw_lidar(self, distance_cm: float):
+        """Log raw LiDAR reading to local SQLite database."""
+        try:
+            conn = sqlite3.connect('lidar_log.db')
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO raw_lidar (timestamp, distance_cm) VALUES (?, ?)",
+                (time.time(), distance_cm)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            # Silent fail to avoid spamming logs
+            pass
 
     def _calculate_severity(self, depth: float) -> str:
         """

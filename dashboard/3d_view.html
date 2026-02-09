@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Pothole Profile</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background: #1e293b;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #38bdf8;
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 400px !important;
+        }
+
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: #94a3b8;
+            text-decoration: none;
+        }
+
+        .back-btn:hover {
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back to Dashboard</a>
+        <h1 id="title">Pothole Profile</h1>
+        <p id="stats">Loading...</p>
+        <canvas id="profileChart"></canvas>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+
+        async function loadData() {
+            if (!id) {
+                document.getElementById('stats').innerText = "No Pothole ID provided.";
+                return;
+            }
+
+            try {
+                // Fetch all/specific pothole (Simulating API implementation)
+                // Ideally backend should have /api/potholes/{id}
+                const res = await fetch('/api/potholes');
+                const data = await res.json();
+                const pothole = data.find(p => p.id == id);
+
+                if (!pothole) {
+                    document.getElementById('stats').innerText = "Pothole not found.";
+                    return;
+                }
+
+                document.getElementById('title').innerText = `Pothole #${pothole.id} Profile`;
+                document.getElementById('stats').innerText =
+                    `Depth: ${pothole.depth}cm | Length: ${pothole.length}cm | Width: ${pothole.width}cm | Volume: ${pothole.volume.toFixed(0)}cm³`;
+
+                let profileData = [];
+                try {
+                    profileData = JSON.parse(pothole.profile_data || "[]");
+                } catch (e) { console.error("Parse error", e); }
+
+                // If no profile, mock it with single depth point
+                if (profileData.length === 0 && pothole.depth > 0) {
+                    profileData = [0, pothole.depth, pothole.depth, 0];
+                }
+
+                renderChart(profileData);
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('stats').innerText = "Error loading data.";
+            }
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('profileChart').getContext('2d');
+
+            // Generate labels (distance steps)
+            const labels = data.map((_, i) => `${i}`);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Depth Profile (cm)',
+                        data: data,
+                        borderColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.5)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Depth (cm)' },
+                            reverse: true // Potholes go down!
+                        },
+                        x: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

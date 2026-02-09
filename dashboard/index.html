@@ -217,6 +217,17 @@
             <p><strong>Width:</strong> <span id="detailWidth"></span> cm</p>
             <p><strong>Detected At:</strong> <span id="detailTime"></span></p>
             <p><strong>Status:</strong> <span id="detailStatus"></span></p>
+            <a id="detail3DLink" href="#" style="
+                display: block; 
+                margin-top: 1rem; 
+                padding: 0.5rem; 
+                background: linear-gradient(to right, #2563eb, #3b82f6); 
+                color: white; 
+                text-align: center; 
+                border-radius: 0.5rem; 
+                text-decoration: none; 
+                font-weight: 600;
+            " target="_blank">View 3D Profile ↗</a>
         </div>
     </div>
 
@@ -314,9 +325,9 @@
             document.getElementById('detailImage').src = p.img;
 
             // Visual 3D Box Representation (Simple CSS Trick)
-            // Add a visual indicator relative to size
             const boxColor = p.status === 'Red' ? '#ef4444' : '#f97316';
             document.getElementById('detailImage').style.borderBottom = `${Math.min(p.depth * 2, 20)}px solid ${boxColor}`;
+            document.getElementById('detail3DLink').href = `/3d_view.html?id=${p.id}`;
 
             map.flyTo([p.lat, p.lon], 15);
         }
