@@ -429,6 +429,10 @@ class PotholeSystem:
                 
                 lidar_depth = lidar_depth_m * 100  # m to cm
                 
+                # Log raw data to the secondary database for Surroundings/3D Mapping
+                if self.config.enable_raw_lidar_logging:
+                    self._log_raw_lidar(lidar_depth)
+                
                 # Log periodic status
                 loop_count += 1
                 if loop_count % 200 == 0:  # Every 10 seconds at 20Hz
@@ -442,10 +446,6 @@ class PotholeSystem:
                         self.logger.debug(f"Pothole event started (depth: {lidar_depth:.2f}cm)")
                     
                     event_readings.append(lidar_depth)
-                    
-                    # Log raw data to the secondary database if enabled
-                    if self.config.enable_raw_lidar_logging:
-                        self._log_raw_lidar(lidar_depth)
                     
                 elif in_pothole_event:
                     # Event ended
