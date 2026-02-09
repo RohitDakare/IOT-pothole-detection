@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Pothole Detection Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            --orange: #f97316;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            height: 100vh;
+        }
+
+        /* Sidebar Styling */
+        .sidebar {
+            background-color: var(--card-bg);
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 2rem;
+            border-bottom: 1px solid #334155;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            margin: 0;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .pothole-list {
+            flex: 1;
+            padding: 1rem;
+        }
+
+        .pothole-card {
+            background: #334155;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+            border-left: 4px solid var(--danger);
+        }
+
+        .pothole-card:hover {
+            transform: scale(1.02);
+            background: #475569;
+        }
+
+        .pothole-card.green {
+            border-left-color: var(--success);
+        }
+
+        .pothole-card.orange {
+            border-left-color: var(--orange);
+        }
+
+        .pothole-meta {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-bottom: 0.5rem;
+        }
+
+        .severity {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 1rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .severity.critical {
+            background: var(--danger);
+            color: white;
+        }
+
+        .severity.moderate {
+            background: var(--orange);
+            color: white;
+        }
+
+        .severity.minor {
+            background: var(--success);
+            color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #map {
+            flex: 1;
+            width: 100%;
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            display: flex;
+            gap: 1.5rem;
+            padding: 1rem 2rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            border-radius: 1rem;
+            border: 1px solid #334155;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* Modal / Detail View */
+        .pothole-detail {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 400px;
+            background: var(--card-bg);
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            padding: 1.5rem;
+            display: none;
+            border: 1px solid #334155;
+        }
+
+        .detail-img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 1rem;
+            margin-bottom: 1rem;
+            background: #0f172a;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>Pothole Detection</h1>
+            <a href="/3d-map"
+                style="display: block; margin-top: 10px; color: var(--primary); text-decoration: none; font-size: 0.9rem; font-weight: 600;">View
+                3D Road Profile →</a>
+        </div>
+        <div class="pothole-list" id="potholeList">
+            <!-- Pothole cards will be injected here -->
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="stats-panel">
+            <div class="stat-item">
+                <span class="stat-value" id="totalPotholes">0</span>
+                <span class="stat-label">Total Detected</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="repairedPotholes">0</span>
+                <span class="stat-label">Repaired</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="avgRepairTime">--</span>
+                <span class="stat-label">Avg Repair Time</span>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <div class="pothole-detail" id="potholeDetail">
+        <button onclick="closeDetail()"
+            style="float: right; background: none; border: none; color: white; cursor: pointer;">✕</button>
+        <h2 id="detailSeverity">Critical Pothole</h2>
+        <img id="detailImage" class="detail-img" src="" alt="Pothole View">
+        <div class="pothole-meta">
+            <p><strong>Coordinates:</strong> <span id="detailCoords"></span></p>
+            <p><strong>Depth:</strong> <span id="detailDepth"></span> cm</p>
+            <p><strong>Detected At:</strong> <span id="detailTime"></span></p>
+            <p><strong>Status:</strong> <span id="detailStatus"></span></p>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([19.0760, 72.8777], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CartoDB'
+        }).addTo(map);
+
+        let potholes = [];
+
+        async function fetchPotholes() {
+            try {
+                // Fetch from our FastAPI backend
+                const response = await fetch('/api/potholes');
+                const data = await response.json();
+
+                // Map API data to dashboard format
+                potholes = data.map(p => ({
+                    id: p.id,
+                    lat: parseFloat(p.latitude),
+                    lon: parseFloat(p.longitude),
+                    depth: p.depth,
+                    severity: p.severity_level,
+                    status: p.status,
+                    time: new Date(p.detected_at).toLocaleString(),
+                    img: p.image_url ? p.image_url : 'https://via.placeholder.com/400x200?text=No+Image+Available'
+                }));
+
+                renderPotholes();
+            } catch (err) {
+                console.error("Failed to fetch potholes from API:", err);
+            }
+        }
+
+        function renderPotholes() {
+            const list = document.getElementById('potholeList');
+            list.innerHTML = '';
+
+            potholes.forEach(p => {
+                const card = document.createElement('div');
+                card.className = `pothole-card ${p.status.toLowerCase()}`;
+                card.innerHTML = `
+                    <div class="pothole-meta">${p.time}</div>
+                    <strong>ID: #${p.id}</strong>
+                    <div class="severity ${p.severity.toLowerCase()}">${p.severity}</div>
+                    <div style="margin-top:0.5rem; font-size:0.9rem">Depth: ${p.depth}cm</div>
+                `;
+                card.onclick = () => showDetail(p);
+                list.appendChild(card);
+
+                const color = p.status === 'Red' ? '#ef4444' : (p.status === 'Orange' ? '#f97316' : '#10b981');
+                L.circleMarker([p.lat, p.lon], {
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.8,
+                    radius: 8
+                }).addTo(map).bindPopup(`<b>Pothole #${p.id}</b><br>${p.severity}`);
+            });
+
+            document.getElementById('totalPotholes').innerText = potholes.length;
+            document.getElementById('repairedPotholes').innerText = potholes.filter(p => p.status === 'Green').length;
+        }
+
+        function showDetail(p) {
+            document.getElementById('potholeDetail').style.display = 'block';
+            document.getElementById('detailSeverity').innerText = `${p.severity} Pothole`;
+            document.getElementById('detailCoords').innerText = `${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`;
+            document.getElementById('detailDepth').innerText = p.depth;
+            document.getElementById('detailTime').innerText = p.time;
+            document.getElementById('detailStatus').innerText = p.status;
+            document.getElementById('detailImage').src = p.img;
+
+            map.flyTo([p.lat, p.lon], 15);
+        }
+
+        function closeDetail() {
+            document.getElementById('potholeDetail').style.display = 'none';
+        }
+
+        fetchPotholes();
+        setInterval(fetchPotholes, 5000); // Polling every 5s
+    </script>
+</body>
+
+</html>

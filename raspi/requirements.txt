@@ -1,0 +1,4 @@
+pyserial
+adafruit-circuitpython-gps
+pandas
+matplotlib

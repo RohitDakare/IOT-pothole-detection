@@ -1,0 +1,40 @@
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:197] - ============================================================
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:198] - Initializing Pothole Detection System
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:199] - ============================================================
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:217] - GPIO initialized successfully
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:232] - Initializing sensors...
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:240] - ✓ Ultrasonic sensor initialized
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:247] - ✓ GPS module initialized
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:258] - ✓ LiDAR sensor initialized
+2026-02-09 17:49:42 - PotholeSystem - INFO - [main2.py:267] - Initializing communication modules...
+2026-02-09 17:49:48 - PotholeSystem - INFO - [main2.py:276] - ✓ GSM module initialized
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:289] - ✓ Camera trigger initialized
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:301] - Initializing Bluetooth...
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:310] - ✓ Bluetooth initialized (SoftwareSerial)
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:331] - ✓ Motor controller initialized
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:339] - Loading ML model...
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:342] - ✓ ML model loaded from sensor_ml_model/pothole_sensor_model.pkl
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:228] - System initialization complete
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:619] - Starting pothole detection system...
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:360] - Bluetooth control thread started
+2026-02-09 17:49:50 - PotholeSystem - INFO - [main2.py:394] - Detection loop started
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:197] - ============================================================
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:198] - Initializing Pothole Detection System
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:199] - ============================================================
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:217] - GPIO initialized successfully
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:232] - Initializing sensors...
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:240] - ✓ Ultrasonic sensor initialized
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:247] - ✓ GPS module initialized
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:258] - ✓ LiDAR sensor initialized
+2026-02-09 18:02:55 - PotholeSystem - INFO - [main2.py:267] - Initializing communication modules...
+2026-02-09 18:03:01 - PotholeSystem - INFO - [main2.py:276] - ✓ GSM module initialized
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:289] - ✓ Camera trigger initialized
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:301] - Initializing Bluetooth...
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:310] - ✓ Bluetooth initialized (SoftwareSerial)
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:331] - ✓ Motor controller initialized
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:339] - Loading ML model...
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:342] - ✓ ML model loaded from sensor_ml_model/pothole_sensor_model.pkl
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:228] - System initialization complete
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:619] - Starting pothole detection system...
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:360] - Bluetooth control thread started
+2026-02-09 18:03:03 - PotholeSystem - INFO - [main2.py:394] - Detection loop started
