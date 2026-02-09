@@ -400,266 +400,190 @@ class PotholeSystem:
                 break
             except Exception as e:
                 self.logger.error(f"Unexpected bluetooth error: {e}")
-                break
-        
         self.logger.info("Bluetooth control thread stopped")
 
     def detection_loop(self):
-        """The main loop for detecting potholes with baseline tracking."""
-        self.logger.info("Detection loop started")
+        """
+        High-Performance 50Hz Detection Loop with Sensor Fusion.
+        Target Latency: < 20ms processing time.
+        """
+        self.logger.info("🚀 Starting High-Speed Detection Loop (50Hz)")
         
         if not self.sensors.get('lidar'):
-            self.logger.critical("LiDAR sensor not available. Cannot run detection.")
+            self.logger.critical("LiDAR sens not available!")
             return
         
+        # High-Speed Config
+        SAMPLING_INTERVAL = 0.02  # 20ms = 50Hz
+        
+        # Rolling Buffers
+        baseline_window = []
+        baseline_window_size = 20
+        baseline_distance = None
+        
+        # Event Tracking
         event_readings = []
         event_start_time = 0
         in_pothole_event = False
         loop_count = 0
         
-        # Baseline tracking - use rolling window to establish road surface
-        baseline_window = []
-        baseline_window_size = 20  # Use last 20 readings for baseline
-        baseline_distance = None
-        
-        self.logger.info("Establishing baseline... collecting initial readings")
+        # Performance Monitoring
+        next_loop_time = time.time()
         
         while not self._shutdown_event.is_set():
             try:
-                # Get LiDAR reading (absolute distance to surface)
-                lidar_distance_m = self.sensors['lidar'].get_distance()
+                loop_start = time.time()
                 
-                if lidar_distance_m is None:
-                    # Ignore occasional None results
-                    time.sleep(self.config.sampling_rate)
+                # 1. FAST LiDAR Read
+                # We expect the sensor class to handle raw buffering
+                lidar_dist_m = self.sensors['lidar'].get_distance()
+                
+                # If LiDAR misses, don't block, just skip frame (maintain 50Hz cadence)
+                if lidar_dist_m is None:
+                    # Busy wait for next slot to maintain timing precision
+                    while time.time() < next_loop_time:
+                         time.sleep(0.001) 
+                    next_loop_time += SAMPLING_INTERVAL
                     continue
-                
-                lidar_distance_cm = lidar_distance_m * 100  # m to cm
-                
-                # OUTLIER REJECTION: Ignore readings that are physically impossible
-                # or represent massive sudden jumps (e.g. > 500cm jump in 0.05s)
-                if baseline_distance is not None:
-                    if abs(lidar_distance_cm - baseline_distance) > 500:
-                        self.logger.warning(f"Discarding spike: {lidar_distance_cm:.2f}cm")
-                        continue
 
-                # Log raw data to the secondary database
-                if self.config.enable_raw_lidar_logging:
-                    self._log_raw_lidar(lidar_distance_cm)
+                lidar_cm = lidar_dist_m * 100
                 
-                # Update baseline using median of window (more robust than min)
+                # 2. Raw 3D Logging (for Dashboard Point Cloud)
+                if self.config.enable_raw_lidar_logging:
+                    self._log_raw_lidar(lidar_cm)
+
+                # 3. Dynamic Baseline Tracking (The "Ground" Level)
                 if not in_pothole_event:
-                    baseline_window.append(lidar_distance_cm)
+                    baseline_window.append(lidar_cm)
                     if len(baseline_window) > baseline_window_size:
                         baseline_window.pop(0)
                     
                     if len(baseline_window) >= 10:
-                        # Use Median to ignore single-frame errors
-                        baseline_distance = sorted(baseline_window)[len(baseline_window)//2]
-                
-                # Calculate actual depth
-                depth = 0
-                if baseline_distance is not None:
-                    depth = lidar_distance_cm - baseline_distance
-                
-                # Log periodic status
-                loop_count += 1
-                if loop_count % 100 == 0: 
-                    self.logger.info(
-                        f"Status: Dist={lidar_distance_cm:.2f}cm, "
-                        f"Base={baseline_distance:.2f}cm, "
-                        f"Depth={depth:.2f}cm"
-                    )
-                
-                # Pothole detection logic
+                        # Fast median approximation
+                        sorted_window = sorted(baseline_window)
+                        baseline_distance = sorted_window[len(sorted_window)//2]
+
+                # 4. Calculate Depth
+                depth = 0.0
+                if baseline_distance:
+                    depth = lidar_cm - baseline_distance
+
+                # 5. POTHOLE LOGIC
                 if depth > self.config.pothole_threshold:
                     if not in_pothole_event:
+                        # --- START OF EVENT ---
                         in_pothole_event = True
                         event_start_time = time.time()
-                        self.logger.info(f"START: depth={depth:.2f}cm")
-                    
+                        self.logger.info(f"⚡ POTHOLE TRIGGER: {depth:.1f}cm depth")
+                        
+                        # TRIGGER CAMERA INSTANTLY (latency critical)
+                        if self.comms.get('camera'):
+                             threading.Thread(target=self.comms['camera'].trigger).start()
+
                     event_readings.append(depth)
-                    
+                
                 elif in_pothole_event:
-                    # Event ended
+                    # --- END OF EVENT ---
                     in_pothole_event = False
                     duration = time.time() - event_start_time
                     
-                    # IGNORE NOISE: Potholes aren't 1cm long (single sample noise)
-                    if len(event_readings) >= 3:
-                        self.logger.info(f"END: duration={duration:.2f}s, samples={len(event_readings)}")
-                        self._handle_pothole_event(event_readings, event_start_time)
-                    else:
-                        self.logger.debug("Discarded short event (possible noise)")
+                    if len(event_readings) >= 2: # Min 2 samples (40ms detection duration)
+                         # FUSE ULTRASONIC DATA HERE (Backup Validtion)
+                         us_depth = 0
+                         if self.sensors.get('ultrasonic'):
+                             us_dist = self.sensors['ultrasonic'].get_distance()
+                             if us_dist and baseline_distance:
+                                 us_depth = us_dist - baseline_distance
+
+                         self._handle_pothole_event(event_readings, event_start_time, us_depth_validation=us_depth)
                     
                     event_readings = []
-                
-                time.sleep(self.config.sampling_rate)
-                
-            except KeyboardInterrupt:
-                self.logger.info("Detection loop interrupted by user")
-                break
-            except Exception as e:
-                self.logger.error(f"Error in detection loop: {e}", exc_info=True)
-                with self._lock:
-                    self.stats['errors'] += 1
-                time.sleep(self.config.sampling_rate)
-        
-        self.logger.info("Detection loop stopped")
 
-    def _handle_pothole_event(self, readings: List[float], start_time: float):
+                # 6. Precision Timing (50Hz)
+                next_loop_time += SAMPLING_INTERVAL
+                sleep_time = next_loop_time - time.time()
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+
+            except Exception as e:
+                self.logger.error(f"Loop error: {e}")
+                time.sleep(0.05)
+
+
+    def _handle_pothole_event(self, readings: List[float], start_time: float, us_depth_validation=0):
         """
-        Classifies and reports a pothole event using advanced measurement analysis.
-        
-        Args:
-            readings: List of depth readings (in cm)
-            start_time: Event start timestamp
+        Process event and send 3D-ready data to backend.
         """
         duration = time.time() - start_time
         
-        if not readings:
-            self.logger.warning("Empty readings for pothole event")
-            return
-        
-        # Import the advanced measurement system
+        # 1. Advanced Measurement Analysis
         try:
             from pothole_measurement import PotholeAnalyzer
-            
-            # Initialize analyzer with system configuration
             analyzer = PotholeAnalyzer(
                 vehicle_speed=self.config.estimated_speed,
-                sensor_height=15.0,  # Typical sensor height above road
-                sampling_rate=1.0 / self.config.sampling_rate,  # Convert to Hz
-                road_surface_threshold=self.config.pothole_threshold
+                sensor_height=15.0,
+                sampling_rate=50.0 # Updated to 50Hz
             )
-            
-            # Perform advanced analysis
             measurement = analyzer.analyze_pothole(readings, duration)
             
-            # Extract measurements
             max_depth = measurement.max_depth
-            avg_depth = measurement.avg_depth
             length = measurement.length
             width = measurement.width
             volume = measurement.volume
             confidence = measurement.confidence
             
-            self.logger.info(
-                f"Advanced Analysis: Depth={max_depth:.2f}cm, "
-                f"Length={length:.2f}cm, Width={width:.2f}cm, "
-                f"Volume={volume:.2f}cm³, Confidence={confidence:.2f}"
-            )
-            
         except ImportError:
-            self.logger.warning("Advanced measurement module not available, using simple method")
-            # Fallback to simple calculation
             max_depth = max(readings)
-            avg_depth = sum(readings) / len(readings)
             length = duration * self.config.estimated_speed
             width = length * 0.85
-            volume = 0
+            volume = (length * width * max_depth) / 2
             confidence = 0.5
-        except Exception as e:
-            self.logger.error(f"Measurement analysis failed: {e}, using simple method")
-            max_depth = max(readings)
-            avg_depth = sum(readings) / len(readings)
-            length = duration * self.config.estimated_speed
-            width = length * 0.85
-            volume = 0
-            confidence = 0.5
-        
-        # ML Classification (optional - don't block on this)
-        classification = "pothole"  # Default classification
-        
-        if self.ml_model:
-            try:
-                ml_classification = self.ml_model.classify_event(readings, duration)
-                self.logger.info(f"ML Classification: {ml_classification}")
-                
-                # Only use ML classification if it's confident (not "Unknown")
-                if ml_classification and ml_classification.lower() != "unknown":
-                    classification = ml_classification
-                    
-                    # Check if ML says it's NOT a pothole
-                    if "pothole" not in classification.lower():
-                        self.logger.info(f"ML rejected as pothole: {classification}")
-                        with self._lock:
-                            self.stats['false_positives'] += 1
-                        return
-                else:
-                    self.logger.info("ML returned Unknown - using depth-based detection")
-                    
-            except Exception as e:
-                self.logger.warning(f"ML classification failed: {e}, proceeding with depth-based detection")
-        else:
-            self.logger.debug("ML model not available, using depth-based detection only")
-        
-        # Confirmed pothole (either by ML or by depth threshold)
-        with self._lock:
-            self.stats['detections'] += 1
-        
-        severity = self._calculate_severity(max_depth)
-        
-        self.logger.info("=" * 60)
-        self.logger.info(f"DETECTION #{self.stats['detections']}: POTHOLE CONFIRMED!")
-        self.logger.info(f"  Severity: {severity}")
-        self.logger.info(f"  Max Depth: {max_depth:.2f} cm")
-        self.logger.info(f"  Avg Depth: {avg_depth:.2f} cm")
-        self.logger.info(f"  Estimated Length: {length:.2f} cm")
-        self.logger.info(f"  Estimated Width: {width:.2f} cm")
-        self.logger.info(f"  Estimated Volume: {volume:.2f} cm³")
-        self.logger.info(f"  Confidence Score: {confidence:.2f}")
-        self.logger.info(f"  Classification: {classification}")
-        self.logger.info("=" * 60)
-        
-        # Trigger camera
-        if self.comms.get('camera'):
-            try:
-                self.comms['camera'].trigger()
-                self.logger.info("Camera triggered")
-            except Exception as e:
-                self.logger.error(f"Camera trigger failed: {e}")
-        
-        # Get GPS coordinates
-        coords = self._get_gps_coordinates()
-        
-        if coords is None:
-            if self.config.require_gps_fix:
-                self.logger.warning("GPS fix required but not available. Skipping upload.")
-                return
-            coords = {'lat': 0.0, 'lon': 0.0, 'fixed': False}
-        
-        # Prepare data
+
+        # 2. Get Location
+        coords = self._get_gps_coordinates() or {'lat': 0.0, 'lon': 0.0, 'fixed': False}
+
+        # 3. Construct 3D Payload
+        # "dimensions" object specifically for 3D dashboard section
         data = {
             "latitude": coords['lat'],
             "longitude": coords['lon'],
             "depth": round(max_depth, 2),
-            "avg_depth": round(avg_depth, 2),
+            "avg_depth": round(sum(readings)/len(readings), 2),
             "length": round(length, 2),
             "width": round(width, 2),
             "volume": round(volume, 2),
             "confidence": round(confidence, 2),
-            "severity": severity,
-            "classification": classification,
+            "sensor_fusion": {
+                "lidar_depth": round(max_depth, 2),
+                "ultrasonic_depth": round(us_depth_validation, 2) if us_depth_validation else None,
+                "backup_confirmed": (us_depth_validation > self.config.pothole_threshold) if us_depth_validation else False
+            },
             "timestamp": datetime.now().isoformat(),
             "gps_fixed": coords['fixed'],
-            "sample_count": len(readings)
+            "3d_view": True  # Flag for dashboard
         }
-        
-        # Send data
+
+        # 3a. Classification (Non-blocking)
+        if self.ml_model:
+             try:
+                 data["classification"] = self.ml_model.classify_event(readings, duration)
+             except:
+                 data["classification"] = "pothole"
+        else:
+             data["classification"] = "pothole"
+
+        self.logger.info(f"🚀 DETECTED: Depth={max_depth}cm | Fusion={data['sensor_fusion']['backup_confirmed']}")
+
+        # 4. SEND (Trigger GSM/Backend)
         if self.comms.get('gsm'):
-            try:
-                self.comms['gsm'].send_data(data)
-                self.logger.info("Data sent via GSM successfully")
-            except Exception as e:
-                self.logger.error(f"GSM send failed: {e}")
+            # Run in thread to not block next detection
+            threading.Thread(target=self.comms['gsm'].send_data, args=(data,)).start()
         else:
             self.logger.warning("GSM not available, data not sent")
         
-        # Wait for camera confirmation
+        # Camera confirmation (non-blocking)
         if self.comms.get('camera'):
             try:
-                # Use threading to avoid blocking detection
                 threading.Thread(
                     target=self.comms['camera'].wait_for_confirmation,
                     daemon=True
@@ -670,7 +594,7 @@ class PotholeSystem:
     def _get_gps_coordinates(self) -> Optional[Dict[str, Any]]:
         """Get GPS coordinates with error handling."""
         if not self.sensors.get('gps'):
-            self.logger.warning("GPS sensor not available")
+            # self.logger.warning("GPS sensor not available") # removed to reduce log noise
             return None
         
         try:
