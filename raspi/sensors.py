@@ -65,20 +65,31 @@ class LiDAR:
         Reads the distance from the LiDAR sensor.
 
         Returns:
-            float: The distance in meters.
+            float: The distance in meters, or None if no valid data available.
         """
         if not self.ser:
-            return 0
+            print("LiDAR Error: Serial port not initialized")
+            return None
         try:
             if isinstance(self.ser, serial.Serial):
                 if self.ser.in_waiting >= 9:
                     # Read 9 bytes for TF02-Pro (YY + 7 data bytes)
                     received_data = self.ser.read(9)
-                    if len(received_data) == 9 and received_data[0] == ord(b'Y') and received_data[1] == ord(b'Y'):
+                    # CRITICAL FIX: Use 0x59 (hex for 'Y') instead of ord(b'Y')
+                    # serial.read() returns bytes, where each byte is already an integer
+                    if len(received_data) == 9 and received_data[0] == 0x59 and received_data[1] == 0x59:
                         d_low = received_data[2]
                         d_high = received_data[3]
                         self.dist = d_low + d_high * 256
+                        # Return distance in meters
                         return self.dist / 100.0
+                    else:
+                        # Debug: Print what we actually received
+                        if len(received_data) >= 2:
+                            print(f"LiDAR: Invalid header - got 0x{received_data[0]:02X} 0x{received_data[1]:02X}, expected 0x59 0x59")
+                else:
+                    # No data available yet
+                    return None
             else: # SoftwareSerial
                 # Read 'Y' 'Y' bytes with timeout
                 byte1 = self.ser.read(1, timeout=0.1)
@@ -92,9 +103,22 @@ class LiDAR:
                             d_high = data[1]
                             self.dist = d_low + d_high * 256
                             return self.dist / 100.0
+                        else:
+                            print(f"LiDAR: Incomplete data frame - got {len(data)} bytes, expected 7")
+                    else:
+                        print(f"LiDAR: Invalid second header byte")
+                else:
+                    # No data available
+                    return None
         except serial.SerialException as e:
             print(f"LiDAR get_distance error: {e}")
-        return 0
+            return None
+        except Exception as e:
+            print(f"LiDAR unexpected error: {e}")
+            return None
+        
+        # No valid data received
+        return None
 
 
 class Ultrasonic:
