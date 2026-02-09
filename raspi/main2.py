@@ -572,7 +572,11 @@ class PotholeSystem:
         else:
              data["classification"] = "pothole"
 
-        self.logger.info(f"🚀 DETECTED: Depth={max_depth}cm | Fusion={data['sensor_fusion']['backup_confirmed']}")
+        self.logger.info(
+            f"🚀 DETECTED POTHOLE!\n"
+            f"   📏 Dimensions: {length:.2f}cm (L) x {width:.2f}cm (W) x {max_depth:.2f}cm (D)\n"
+            f"   📦 Volume: {volume:.0f}cm³ | Fusion Verified: {data['sensor_fusion']['backup_confirmed']}"
+        )
 
         # 4. SEND (Trigger GSM/Backend)
         if self.comms.get('gsm'):
