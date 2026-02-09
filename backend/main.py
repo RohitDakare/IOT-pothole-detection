@@ -102,13 +102,26 @@ class PotholeData(BaseModel):
     depth: float
     length: float = 0.0
     width: float = 0.0
+    volume: float = 0.0  # Added volume
     severity: str
-    timestamp: float
+    timestamp: str  # Changed to str to accept ISO format
 
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row # Allows dictionary-like access
+    conn.row_factory = sqlite3.Row 
     return conn
+
+# Ensure volume column exists
+def check_volume_column():
+    conn = get_db_connection()
+    try:
+        conn.execute("ALTER TABLE potholes ADD COLUMN volume REAL DEFAULT 0")
+        conn.commit()
+    except:
+        pass
+    conn.close()
+
+check_volume_column()
 
 @app.post("/api/potholes")
 async def report_pothole(data: PotholeData):
@@ -116,8 +129,7 @@ async def report_pothole(data: PotholeData):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 1. Check for nearby existing potholes (within approx 5 meters / ~0.00005 degrees)
-        # To determine if this is a "Re-scan"
+        # 1. Check for nearby existing potholes
         threshold_dist = 0.00005 
         cursor.execute("""
             SELECT id, depth, status FROM potholes 
@@ -128,7 +140,6 @@ async def report_pothole(data: PotholeData):
         existing = cursor.fetchone()
         
         # Logic for Color/Status based on Depth
-        # User Rule: > 8cm is Red (Critical), <= 8cm is Orange (Moderate)
         if data.depth > 8:
             new_status = 'Red'
             new_severity = 'Critical'
@@ -137,8 +148,7 @@ async def report_pothole(data: PotholeData):
             new_severity = 'Moderate'
 
         if existing:
-            # 2. Repair Logic: If we re-scan a location and depth is now very small (< 2cm)
-            # mark the existing pothole as Repaired (Green)
+            # 2. Repair Logic
             if data.depth < 2.0:
                 cursor.execute("""
                     UPDATE potholes SET status = 'Green', repaired_at = ? 
@@ -148,15 +158,29 @@ async def report_pothole(data: PotholeData):
                 conn.close()
                 return {"status": "repaired", "id": existing['id']}
             
-            # If it's still a pothole, just update the existing record or ignore if status is same
-            # For this logic, we will insert a new detection if it's still deep
-        
-        # 3. Insert New Pothole
+        # 3. Insert New Pothole with Dimensions & Volume
         query = """
-        INSERT INTO potholes (latitude, longitude, depth, length, width, severity_level, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO potholes (latitude, longitude, depth, length, width, volume, severity_level, status, detected_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        cursor.execute(query, (data.latitude, data.longitude, data.depth, data.length, data.width, new_severity, new_status))
+        # Parse timestamp string to datetime object if needed, or store as is if SQLite handles it
+        # Ideally, we convert ISO string back to datetime for storage consistency
+        try:
+            dt_object = datetime.fromisoformat(data.timestamp)
+        except:
+            dt_object = datetime.now()
+
+        cursor.execute(query, (
+            data.latitude, 
+            data.longitude, 
+            data.depth, 
+            data.length, 
+            data.width,
+            data.volume,
+            new_severity, 
+            new_status,
+            dt_object
+        ))
         conn.commit()
         pothole_id = cursor.lastrowid
         

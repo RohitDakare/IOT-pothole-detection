@@ -241,8 +241,9 @@
                     lat: parseFloat(p.latitude),
                     lon: parseFloat(p.longitude),
                     depth: p.depth,
-                    length: p.length,
-                    width: p.width,
+                    length: p.length || 0,
+                    width: p.width || 0,
+                    volume: p.volume || 0,
                     severity: p.severity_level,
                     status: p.status,
                     time: new Date(p.detected_at).toLocaleString(),
@@ -266,7 +267,9 @@
                     <div class="pothole-meta">${p.time}</div>
                     <strong>ID: #${p.id}</strong>
                     <div class="severity ${p.severity.toLowerCase()}">${p.severity}</div>
-                    <div style="margin-top:0.5rem; font-size:0.9rem">Depth: ${p.depth}cm</div>
+                    <div style="margin-top:0.5rem; font-size:0.9rem">
+                        Depth: ${p.depth}cm | Vol: ${p.volume.toFixed(0)}cm³
+                    </div>
                 `;
                 card.onclick = () => showDetail(p);
                 list.appendChild(card);
@@ -277,7 +280,11 @@
                     fillColor: color,
                     fillOpacity: 0.8,
                     radius: 8
-                }).addTo(map).bindPopup(`<b>Pothole #${p.id}</b><br>${p.severity}`);
+                }).addTo(map).bindPopup(`
+                    <b>Pothole #${p.id}</b><br>
+                    ${p.severity}<br>
+                    ${p.length.toFixed(1)}cm x ${p.width.toFixed(1)}cm x ${p.depth}cm
+                `);
             });
 
             document.getElementById('totalPotholes').innerText = potholes.length;
@@ -291,9 +298,25 @@
             document.getElementById('detailDepth').innerText = p.depth;
             document.getElementById('detailLength').innerText = p.length;
             document.getElementById('detailWidth').innerText = p.width;
+
+            // Add Volume display if not exists or update it
+            let volEl = document.getElementById('detailVolume');
+            if (!volEl) {
+                const p = document.createElement('p');
+                p.innerHTML = '<strong>Volume:</strong> <span id="detailVolume"></span> cm³';
+                document.querySelector('.pothole-meta').appendChild(p);
+                volEl = document.getElementById('detailVolume');
+            }
+            volEl.innerText = p.volume.toFixed(2);
+
             document.getElementById('detailTime').innerText = p.time;
             document.getElementById('detailStatus').innerText = p.status;
             document.getElementById('detailImage').src = p.img;
+
+            // Visual 3D Box Representation (Simple CSS Trick)
+            // Add a visual indicator relative to size
+            const boxColor = p.status === 'Red' ? '#ef4444' : '#f97316';
+            document.getElementById('detailImage').style.borderBottom = `${Math.min(p.depth * 2, 20)}px solid ${boxColor}`;
 
             map.flyTo([p.lat, p.lon], 15);
         }
