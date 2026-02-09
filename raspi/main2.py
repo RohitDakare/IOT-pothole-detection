@@ -471,10 +471,10 @@ class PotholeSystem:
 
     def _handle_pothole_event(self, readings: List[float], start_time: float):
         """
-        Classifies and reports a pothole event.
+        Classifies and reports a pothole event using advanced measurement analysis.
         
         Args:
-            readings: List of depth readings
+            readings: List of depth readings (in cm)
             start_time: Event start timestamp
         """
         duration = time.time() - start_time
@@ -483,23 +483,52 @@ class PotholeSystem:
             self.logger.warning("Empty readings for pothole event")
             return
         
-        # Calculate statistics
-        max_depth = max(readings)
-        avg_depth = sum(readings) / len(readings)
-        
-        # Length calculation: Speed (cm/s) * Duration (s)
-        # Using estimated_speed from config (e.g., 20 cm/s for real robot)
-        length = duration * self.config.estimated_speed
-        
-        # Width calculation: 
-        # Since we have a point LiDAR, we estimate width based on length (heuristic)
-        # Typically potholes are 70-90% as wide as they are long.
-        width = length * 0.85 
-        
-        self.logger.info(
-            f"Processing event: Depth={max_depth:.2f}cm, "
-            f"Length={length:.2f}cm, Width={width:.2f}cm"
-        )
+        # Import the advanced measurement system
+        try:
+            from pothole_measurement import PotholeAnalyzer
+            
+            # Initialize analyzer with system configuration
+            analyzer = PotholeAnalyzer(
+                vehicle_speed=self.config.estimated_speed,
+                sensor_height=15.0,  # Typical sensor height above road
+                sampling_rate=1.0 / self.config.sampling_rate,  # Convert to Hz
+                road_surface_threshold=self.config.pothole_threshold
+            )
+            
+            # Perform advanced analysis
+            measurement = analyzer.analyze_pothole(readings, duration)
+            
+            # Extract measurements
+            max_depth = measurement.max_depth
+            avg_depth = measurement.avg_depth
+            length = measurement.length
+            width = measurement.width
+            volume = measurement.volume
+            confidence = measurement.confidence
+            
+            self.logger.info(
+                f"Advanced Analysis: Depth={max_depth:.2f}cm, "
+                f"Length={length:.2f}cm, Width={width:.2f}cm, "
+                f"Volume={volume:.2f}cm³, Confidence={confidence:.2f}"
+            )
+            
+        except ImportError:
+            self.logger.warning("Advanced measurement module not available, using simple method")
+            # Fallback to simple calculation
+            max_depth = max(readings)
+            avg_depth = sum(readings) / len(readings)
+            length = duration * self.config.estimated_speed
+            width = length * 0.85
+            volume = 0
+            confidence = 0.5
+        except Exception as e:
+            self.logger.error(f"Measurement analysis failed: {e}, using simple method")
+            max_depth = max(readings)
+            avg_depth = sum(readings) / len(readings)
+            length = duration * self.config.estimated_speed
+            width = length * 0.85
+            volume = 0
+            confidence = 0.5
         
         # ML Classification
         if not self.ml_model:
@@ -533,6 +562,8 @@ class PotholeSystem:
         self.logger.info(f"  Avg Depth: {avg_depth:.2f} cm")
         self.logger.info(f"  Estimated Length: {length:.2f} cm")
         self.logger.info(f"  Estimated Width: {width:.2f} cm")
+        self.logger.info(f"  Estimated Volume: {volume:.2f} cm³")
+        self.logger.info(f"  Confidence Score: {confidence:.2f}")
         self.logger.info(f"  Classification: {classification}")
         self.logger.info("=" * 60)
         
@@ -561,6 +592,8 @@ class PotholeSystem:
             "avg_depth": round(avg_depth, 2),
             "length": round(length, 2),
             "width": round(width, 2),
+            "volume": round(volume, 2),
+            "confidence": round(confidence, 2),
             "severity": severity,
             "classification": classification,
             "timestamp": datetime.now().isoformat(),
