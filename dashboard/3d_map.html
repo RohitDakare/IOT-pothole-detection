@@ -225,15 +225,25 @@
                     const positions = [];
                     const colors = [];
                     const colorObj = new THREE.Color();
+                    let maxZ = 0;
 
                     points.forEach(p => {
-                        // Normalize coordinates for ThreeJS workspace
-                        positions.push(p.z, -p.y / 5, -p.x + 20);
+                        // Map p.z (distance) to ThreeJS Z-axis
+                        // Map p.x (offset) to ThreeJS X-axis
+                        // Map p.y (height) to ThreeJS Y-axis (inverted because p.y is depth)
+
+                        // Scale factor for visibility
+                        const z = p.z;
+                        const y = -p.y / 5; // Pothole depth goes down
+                        const x = p.x;
+
+                        positions.push(x, y, z);
+                        if (z > maxZ) maxZ = z;
 
                         // Color based on depth
-                        if (p.y > 25) colorObj.setHex(0xef4444); // Critical
-                        else if (p.y > 15) colorObj.setHex(0xf97316); // Moderate
-                        else colorObj.setHex(0x3b82f6); // Normal Surface
+                        if (p.y > 8) colorObj.setHex(0xef4444); // Critical > 8cm
+                        else if (p.y > 4) colorObj.setHex(0xf97316); // Moderate > 4cm
+                        else colorObj.setHex(0x3b82f6); // Normal
 
                         colors.push(colorObj.r, colorObj.g, colorObj.b);
                     });
@@ -242,6 +252,20 @@
                     roadPointsCloud.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
                     roadPointsCloud.geometry.attributes.position.needsUpdate = true;
                     roadPointsCloud.geometry.attributes.color.needsUpdate = true;
+
+                    // Auto-follow camera
+                    if (maxZ > 0) {
+                        const targetZ = maxZ;
+                        // Smoothly move camera and controls target
+                        controls.target.z = targetZ;
+                        camera.position.z = targetZ + 30; // Keep camera behind
+                        controls.update();
+
+                        // Extend road implementation visual
+                        road.scale.y = Math.max(1, targetZ / 50); // Stretch road as we go
+                        road.position.z = targetZ / 2; // Keep centered
+                    }
+
                 } catch (err) {
                     console.error("Road Profile Fetch Error:", err);
                 }

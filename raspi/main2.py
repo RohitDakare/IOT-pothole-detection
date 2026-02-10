@@ -671,7 +671,10 @@ class PotholeSystem:
         # 2. Buffer for Upload
         try:
             with self.road_buffer_lock:
-                self.road_buffer.append({'x': 0.0, 'y': distance_cm, 'z': ts})
+                # z = distance along road = (time - start_time) * estimated_speed (e.g. 5 m/s)
+                # This makes the 3D map start at z=0 and grow forward
+                relative_z = (ts - self.stats['start_time']) * 5.0 
+                self.road_buffer.append({'x': 0.0, 'y': distance_cm, 'z': relative_z})
         except: pass
 
     def _upload_road_profile_loop(self):
