@@ -27,18 +27,23 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 from datetime import datetime
+
 import serial
-from RPi import GPIO
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
-from pathlib import Path
-import json
-from datetime import datetime
-import serial
-from RPi import GPIO
+try:
+    from RPi import GPIO
+except ImportError:
+    import logging
+    logging.warning("RPi.GPIO not found. Using mock for local testing.")
+    from unittest.mock import MagicMock
+    GPIO = MagicMock()
+
 
 # Add project root to Python path
-sys.path.append('/home/admin/main/IOT')
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 from sensors import LiDAR, Ultrasonic, GPS
 from communication import GSM
@@ -69,7 +74,7 @@ class SystemConfig:
     # WiFi and Server Configuration
     wifi_ssid: str = "TP-Link_2CF7"
     wifi_password: str = "Tp@16121991"
-    backend_url: str = "http://34.93.53.7:8000"
+    backend_url: str = "http://195.35.23.26"
     
     # Pin Configuration
     ultrasonic_trigger: int = 17
@@ -86,13 +91,13 @@ class SystemConfig:
     bluetooth_rx: int = 21
     
     # Logging Configuration
-    log_dir: str = "/home/admin/main/IOT/logs"
+    log_dir: str = os.path.join(project_root, "logs")
     log_level: str = "INFO"
     log_max_bytes: int = 10 * 1024 * 1024  # 10MB
     log_backup_count: int = 5
     
     # Model Configuration
-    model_path: str = 'sensor_ml_model/pothole_sensor_model.pkl'
+    model_path: str = os.path.join(project_root, 'sensor_ml_model', 'pothole_sensor_model.pkl')
     require_ml_model: bool = True
     require_gps_fix: bool = True
     enable_raw_lidar_logging: bool = True
@@ -732,8 +737,8 @@ class PotholeSystem:
 
     def _upload_road_profile_loop(self):
         """Background thread to upload road profile."""
-        # 1. Default Remote IP
-        base_url = "http://34.93.53.7:8000"
+        # 1. Use Configured Backend URL
+        base_url = self.config.backend_url
         
         # 2. Check Localhost (Development Mode)
         try:

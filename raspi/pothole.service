@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=admin
-WorkingDirectory=/home/admin/main/IOT/raspi
-ExecStart=/usr/bin/python3 /home/admin/main/IOT/raspi/main2.py
+WorkingDirectory=/home/admin/pothole_/IOT-pothole-detection/raspi
+ExecStart=/usr/bin/python3 /home/admin/pothole_/IOT-pothole-detection/raspi/main2.py
 Restart=always
 RestartSec=10
 
