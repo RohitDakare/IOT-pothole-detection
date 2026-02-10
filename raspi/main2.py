@@ -679,7 +679,21 @@ class PotholeSystem:
 
     def _upload_road_profile_loop(self):
         """Background thread to upload road profile."""
-        url = "http://195.35.23.26/api/road-profile" # Or localhost for dev
+        # 1. Default Remote IP
+        base_url = "http://195.35.23.26"
+        
+        # 2. Check Localhost (Development Mode)
+        try:
+            # Fast check with tiny timeout
+            if requests.get("http://127.0.0.1:8000/docs", timeout=0.2).status_code == 200:
+                base_url = "http://127.0.0.1:8000"
+                self.logger.info("ℹ️ Local backend detected! Switching target to localhost.")
+        except:
+            pass
+            
+        url = f"{base_url}/api/road-profile"
+        self.logger.info(f"📡 3D Data Upload Thread Started. Target: {url}")
+
         while not self._shutdown_event.is_set():
             time.sleep(1.0) # 1Hz upload
             
@@ -691,12 +705,20 @@ class PotholeSystem:
             
             if batch:
                 try:
-                    requests.post(url, json={
+                    response = requests.post(url, json={
                         "session_id": self.session_id,
                         "points": batch
                     }, timeout=2)
-                except:
-                    pass
+                    
+                    if response.status_code != 200:
+                        self.logger.warning(f"⚠️ Upload failed: {response.status_code} - {response.text}")
+                    # else:
+                    #     self.logger.debug(f"✅ Sent {len(batch)} points")
+
+                except requests.exceptions.ConnectionError:
+                    self.logger.error(f"❌ Connection Error: Cannot reach {base_url}. Is backend running?")
+                except Exception as e:
+                    self.logger.error(f"❌ Upload Error: {e}")
 
     def _calculate_severity(self, depth: float) -> str:
         """
