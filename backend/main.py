@@ -301,8 +301,8 @@ async def get_road_profile():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        # Get last 10 batches of points (approx 10-20 seconds of data)
-        cursor.execute("SELECT points_json FROM road_profiles ORDER BY id DESC LIMIT 10")
+        # Get last 100 batches of points (approx 1-2 minutes of history)
+        cursor.execute("SELECT points_json FROM road_profiles ORDER BY id DESC LIMIT 100")
         rows = cursor.fetchall()
         conn.close()
         
