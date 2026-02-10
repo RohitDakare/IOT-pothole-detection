@@ -53,7 +53,7 @@ from sensor_ml_model.pi_inference import SensorMLInference
 class SystemConfig:
     """System configuration dataclass."""
     # Detection Parameters
-    pothole_threshold: float = 8.0  # cm (Increased to reduce false positives)
+    pothole_threshold: float = 10.0  # cm (Increased for stability)
     sampling_rate: float = 0.05  # seconds (20Hz)
     estimated_speed: float = 30.0  # cm/s
     
@@ -465,7 +465,8 @@ class PotholeSystem:
                     next_loop_time += SAMPLING_INTERVAL
                     continue
 
-                lidar_cm = lidar_dist_m * 100
+                lidar_cm = (lidar_dist_m * 100) - 5.0 # User requested offset
+                lidar_cm = max(0.0, lidar_cm) # Ensure no negative distance
                 
                 # 2. Raw 3D Logging (for Dashboard Point Cloud)
                 if self.config.enable_raw_lidar_logging:
@@ -559,7 +560,7 @@ class PotholeSystem:
             from pothole_measurement import PotholeAnalyzer
             analyzer = PotholeAnalyzer(
                 vehicle_speed=self.config.estimated_speed,
-                sensor_height=15.0,
+                sensor_height=5.0, # Updated to 5cm as per user
                 sampling_rate=50.0 # Updated to 50Hz
             )
             measurement = analyzer.analyze_pothole(readings, duration)
