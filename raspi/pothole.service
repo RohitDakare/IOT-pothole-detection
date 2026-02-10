@@ -1,0 +1,14 @@
+[Unit]
+Description=Pothole Detection Service
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/main/IOT/raspi
+ExecStart=/usr/bin/python3 /home/admin/main/IOT/raspi/main2.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
