@@ -12,7 +12,7 @@ class GSM:
     A class to interact with the SIM800L GSM module.
     """
 
-    def __init__(self, port=None, tx=None, rx=None, baud=9600, server_url="http://195.35.23.26"):
+    def __init__(self, port=None, tx=None, rx=None, baud=9600, server_url="http://34.93.53.7:8000"):
         """
         Initializes the GSM module.
 

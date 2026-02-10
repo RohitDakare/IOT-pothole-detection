@@ -264,20 +264,7 @@ async def get_pothole_stats():
     # ... existing stats logic ...
     return {"total": 0} # Placeholder
 
-@app.post("/api/road-profile")
-async def save_road_profile(data: Dict[str, Any]):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO road_profiles (session_id, points_json) VALUES (?, ?)",
-            (data.get("session_id", "default"), json.dumps(data.get("points", [])))
-        )
-        conn.commit()
-        conn.close()
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 class RoadProfile(BaseModel):
     session_id: str

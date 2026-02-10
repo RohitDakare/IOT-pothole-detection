@@ -5,7 +5,7 @@
 // --- WiFi Configuration ---
 String ssid = "";
 String password = "";
-const char* serverUrl = "http://195.35.23.26/api/upload_image";
+const char* serverUrl = "http://34.93.53.7:8000/api/upload_image";
 
 // --- Pin Definitions (AI-THINKER ESP32-CAM) ---
 #define PWDN_GPIO_NUM     32

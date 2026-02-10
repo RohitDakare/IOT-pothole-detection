@@ -69,7 +69,7 @@ class SystemConfig:
     # WiFi and Server Configuration
     wifi_ssid: str = "TP-Link_2CF7"
     wifi_password: str = "Tp@16121991"
-    backend_url: str = "http://195.35.23.26"
+    backend_url: str = "http://34.93.53.7:8000"
     
     # Pin Configuration
     ultrasonic_trigger: int = 17
@@ -561,6 +561,9 @@ class PotholeSystem:
         # 2. Get Location
         coords = self._get_gps_coordinates() or {'lat': 0.0, 'lon': 0.0, 'fixed': False}
 
+        # 2b. Calculate Severity (Required by Backend)
+        severity = self._calculate_severity(max_depth)
+
         # 3. Construct 3D Payload
         # "dimensions" object specifically for 3D dashboard section
         data = {
@@ -572,6 +575,7 @@ class PotholeSystem:
             "width": round(width, 2),
             "volume": round(volume, 2),
             "confidence": round(confidence, 2),
+            "severity": severity,
             "sensor_fusion": {
                 "lidar_depth": round(max_depth, 2),
                 "ultrasonic_depth": round(us_depth_validation, 2) if us_depth_validation else None,
@@ -595,10 +599,14 @@ class PotholeSystem:
         self.logger.info(
             f"🚀 DETECTED POTHOLE!\n"
             f"   📏 Dimensions: {length:.2f}cm (L) x {width:.2f}cm (W) x {max_depth:.2f}cm (D)\n"
-            f"   📦 Volume: {volume:.0f}cm³ | Fusion Verified: {data['sensor_fusion']['backup_confirmed']}"
+            f"   📦 Volume: {volume:.0f}cm³ | Severity: {severity}"
         )
 
         # 4. SEND (Trigger GSM/Backend)
+        # 4a. HTTP Upload (Preferred for Dashboard)
+        threading.Thread(target=self._send_pothole_http, args=(data,)).start()
+
+        # 4b. GSM Upload (Backup/Remote)
         if self.comms.get('gsm'):
             # Run in thread to not block next detection
             threading.Thread(target=self.comms['gsm'].send_data, args=(data,)).start()
@@ -614,6 +622,31 @@ class PotholeSystem:
                 ).start()
             except Exception as e:
                 self.logger.error(f"Camera confirmation error: {e}")
+
+    def _send_pothole_http(self, data: Dict[str, Any]):
+        """
+        Sends pothole data directly to backend via HTTP (Faster than GSM).
+        """
+        try:
+            # Use configured backend URL
+            api_url = f"{self.config.backend_url}/api/potholes"
+            
+            # Use localhost if running in simulation or development
+            try:
+                if requests.get("http://127.0.0.1:8000/docs", timeout=0.2).status_code == 200:
+                    api_url = "http://127.0.0.1:8000/api/potholes"
+            except: pass
+
+            self.logger.debug(f"📤 Uploading to {api_url}...")
+            response = requests.post(api_url, json=data, timeout=3)
+            
+            if response.status_code == 200:
+                self.logger.info(f"✅ HTTP Upload Success: ID {response.json().get('id')}")
+            else:
+                self.logger.warning(f"⚠️ HTTP Upload Failed: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            self.logger.error(f"❌ HTTP Upload Error: {e}")
 
     def _get_gps_coordinates(self) -> Optional[Dict[str, Any]]:
         """Get GPS coordinates with error handling."""
@@ -680,7 +713,7 @@ class PotholeSystem:
     def _upload_road_profile_loop(self):
         """Background thread to upload road profile."""
         # 1. Default Remote IP
-        base_url = "http://195.35.23.26"
+        base_url = "http://34.93.53.7:8000"
         
         # 2. Check Localhost (Development Mode)
         try:
