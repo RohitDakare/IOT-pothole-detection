@@ -146,12 +146,15 @@ async def report_pothole(data: PotholeData):
         if data.depth > 8:
             new_status = 'Red'
             new_severity = 'Critical'
+        elif data.depth < 2.0:
+            new_status = 'Green'
+            new_severity = 'Minor'
         else:
             new_status = 'Orange'
             new_severity = 'Moderate'
 
         if existing:
-            # 2. Repair Logic
+            # 2. Repair Logic (Mark existing as Green if current depth is low)
             if data.depth < 2.0:
                 cursor.execute("""
                     UPDATE potholes SET status = 'Green', repaired_at = ? 

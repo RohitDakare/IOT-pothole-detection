@@ -199,9 +199,9 @@
                 const geometry = new THREE.CylinderGeometry(1.5, 0.8, depthScale * 5, 32);
 
                 let color = 0x10b981; // Minor/Green
-                if (data.severity === 'Critical') color = 0xef4444; // Red
+                if (data.status === 'Red') color = 0xef4444; // Red
                 else if (data.status === 'Orange') color = 0xf97316; // Orange
-                else if (data.severity === 'Moderate') color = 0xf97316; // Orange
+                else if (data.status === 'Green') color = 0x10b981; // Green
 
                 const material = new THREE.MeshStandardMaterial({
                     color: color,
@@ -258,9 +258,9 @@
                         if (z > maxZ) maxZ = z;
 
                         // Color based on depth
-                        if (p.y > 8) colorObj.setHex(0xef4444); // Critical > 8cm
-                        else if (p.y > 4) colorObj.setHex(0xf97316); // Moderate > 4cm
-                        else colorObj.setHex(0x3b82f6); // Normal
+                        if (p.y > 8) colorObj.setHex(0xef4444); // Red > 8cm
+                        else if (p.y > 2) colorObj.setHex(0xf97316); // Orange > 2cm
+                        else colorObj.setHex(0x10b981); // Green (Repaired)
 
                         colors.push(colorObj.r, colorObj.g, colorObj.b);
                     });

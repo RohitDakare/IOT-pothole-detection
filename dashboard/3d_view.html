@@ -96,7 +96,8 @@
                     profileData = [0, pothole.depth, pothole.depth, 0];
                 }
 
-                renderChart(profileData);
+                const statusColor = pothole.status === 'Red' ? '#ef4444' : (pothole.status === 'Orange' ? '#f97316' : '#10b981');
+                renderChart(profileData, statusColor);
 
             } catch (e) {
                 console.error(e);
@@ -104,7 +105,7 @@
             }
         }
 
-        function renderChart(data) {
+        function renderChart(data, color) {
             const ctx = document.getElementById('profileChart').getContext('2d');
 
             // Generate labels (distance steps)
@@ -117,8 +118,8 @@
                     datasets: [{
                         label: 'Depth Profile (cm)',
                         data: data,
-                        borderColor: '#f43f5e',
-                        backgroundColor: 'rgba(244, 63, 94, 0.5)',
+                        borderColor: color,
+                        backgroundColor: color.replace(')', ', 0.5)').replace('rgb', 'rgba').replace('#ef4444', 'rgba(239, 68, 68, 0.5)').replace('#f97316', 'rgba(249, 115, 22, 0.5)').replace('#10b981', 'rgba(16, 185, 129, 0.5)'),
                         fill: true,
                         tension: 0.4
                     }]

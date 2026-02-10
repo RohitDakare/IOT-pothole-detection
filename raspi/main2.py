@@ -58,14 +58,14 @@ from sensor_ml_model.pi_inference import SensorMLInference
 class SystemConfig:
     """System configuration dataclass."""
     # Detection Parameters
-    pothole_threshold: float = 10.0  # cm (Increased for stability)
+    pothole_threshold: float = 3.0  # cm (Detect shallower potholes for 'Orange' status)
     sampling_rate: float = 0.05  # seconds (20Hz)
     estimated_speed: float = 30.0  # cm/s
     
     # Severity Levels
     severity_minor: tuple = (1, 3)
-    severity_moderate: tuple = (3, 7)
-    severity_critical: tuple = (7, 100)
+    severity_moderate: tuple = (3, 8)
+    severity_critical: tuple = (8, 100)
     
     # Hardware Configuration
     lidar_baud_rate: int = 115200  # Default for TF02-Pro
@@ -74,7 +74,7 @@ class SystemConfig:
     # WiFi and Server Configuration
     wifi_ssid: str = "TP-Link_2CF7"
     wifi_password: str = "Tp@16121991"
-    backend_url: str = "http://195.35.23.26"
+    backend_url: str = "http://34.93.53.7:8000"
     
     # Pin Configuration
     ultrasonic_trigger: int = 17
