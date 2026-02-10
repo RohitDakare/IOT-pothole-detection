@@ -53,7 +53,7 @@ from sensor_ml_model.pi_inference import SensorMLInference
 class SystemConfig:
     """System configuration dataclass."""
     # Detection Parameters
-    pothole_threshold: float = 5.0  # cm
+    pothole_threshold: float = 8.0  # cm (Increased to reduce false positives)
     sampling_rate: float = 0.05  # seconds (20Hz)
     estimated_speed: float = 30.0  # cm/s
     
@@ -487,26 +487,43 @@ class PotholeSystem:
                 if baseline_distance:
                     depth = lidar_cm - baseline_distance
 
-                # 5. POTHOLE LOGIC
-                if depth > self.config.pothole_threshold:
+                # 5. POTHOLE LOGIC with Noise Filtering
+                # Determine if current sample is a trigger
+                is_trigger = depth > self.config.pothole_threshold
+
+                if is_trigger:
                     if not in_pothole_event:
+                        # Improved Trigger: Require 3 consecutive hits to confirm start (Noise Filter)
+                        # We use a temporary counter `consecutive_triggers` here? 
+                        # Or simpler: store potential start time.
+                        # Let's use a simpler approach: Just start, but discard short events later.
+                        
                         # --- START OF EVENT ---
                         in_pothole_event = True
                         event_start_time = time.time()
-                        self.logger.info(f"⚡ POTHOLE TRIGGER: {depth:.1f}cm depth")
+                        self.logger.info(f"⚡ POTHOLE TRIGGER: {depth:.1f}cm depth (Baseline: {baseline_distance:.1f}cm)")
                         
                         # TRIGGER CAMERA INSTANTLY (latency critical)
                         if self.comms.get('camera'):
                              threading.Thread(target=self.comms['camera'].trigger).start()
 
                     event_readings.append(depth)
-                
+                    
+                    # TIMEOUT CHECK: If hole lasts > 3s, it's likely a sensor lift/terrain change
+                    if (time.time() - event_start_time) > 3.0:
+                        self.logger.warning("⚠️ Event timeout (>3s). Interpreting as terrain change/lift. Resetting baseline.")
+                        in_pothole_event = False
+                        event_readings = []
+                        baseline_window = [lidar_cm] # Fast reset to current level
+                        baseline_distance = lidar_cm
+
                 elif in_pothole_event:
                     # --- END OF EVENT ---
                     in_pothole_event = False
                     duration = time.time() - event_start_time
                     
-                    if len(event_readings) >= 2: # Min 2 samples (40ms detection duration)
+                    # Filter short glitches (< 3 samples approx 60ms)
+                    if len(event_readings) >= 3: 
                          # FUSE ULTRASONIC DATA HERE (Backup Validtion)
                          us_depth = 0
                          if self.sensors.get('ultrasonic'):
@@ -515,6 +532,8 @@ class PotholeSystem:
                                  us_depth = us_dist - baseline_distance
 
                          self._handle_pothole_event(event_readings, event_start_time, us_depth_validation=us_depth)
+                    else:
+                        self.logger.debug(f"Ignored short glitch ({len(event_readings)} samples)")
                     
                     event_readings = []
 
