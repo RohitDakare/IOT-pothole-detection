@@ -3,17 +3,18 @@ import time
 import random
 import datetime
 
-API_URL = "http://localhost:8000/api/potholes"
+API_URL = "http://34.93.53.7:8000/api/potholes"
 
 def simulate_real_detection():
     # Simulate a variety of potholes over a "road section"
     print("Starting Full-Scale System Simulation...")
     
     detections = [
-        {"lat": 28.9521, "lon": 77.1039, "depth": 10.5, "severity": "Critical", "classification": "Major Pothole"},
+        {"lat": 28.9521, "lon": 77.1039, "depth": 5.0, "severity": "Moderate", "classification": "Major Pothole"},
         {"lat": 28.9525, "lon": 77.1044, "depth": 4.2, "severity": "Moderate", "classification": "Minor Pothole"},
         {"lat": 28.9528, "lon": 77.1049, "depth": 1.5, "severity": "Minor", "classification": "Normal Road (Dip)"}
     ]
+
 
     for det in detections:
         length = random.uniform(20.0, 50.0)

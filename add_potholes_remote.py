@@ -36,7 +36,7 @@ def add_pothole(lat, lon, depth, length, width):
 
 if __name__ == "__main__":
     # Pothole 1
-    add_pothole(19.0765, 72.8780, 5.0, 7.0, 7.0)
+    add_pothole(28.9521, 77.1039, 5.0, 7.0, 7.0)
 
     # Pothole 2
-    add_pothole(19.0755, 72.8770, 5.0, 7.0, 7.0)
+    add_pothole(28.9525, 77.1044, 5.0, 7.0, 7.0)
