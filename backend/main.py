@@ -370,6 +370,8 @@ elif os.path.exists("dashboard"):
     @app.get("/")
     async def get_index():
         from fastapi.responses import FileResponse
+        return FileResponse("dashboard/index.html")
+
     @app.get("/3d-map")
     async def get_3d_map():
         from fastapi.responses import FileResponse
