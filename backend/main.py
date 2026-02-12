@@ -370,11 +370,82 @@ elif os.path.exists("dashboard"):
     @app.get("/")
     async def get_index():
         from fastapi.responses import FileResponse
-        return FileResponse("dashboard/index.html")
     @app.get("/3d-map")
     async def get_3d_map():
         from fastapi.responses import FileResponse
         return FileResponse("dashboard/3d_map.html")
+
+    @app.get("/kg/admin")
+    async def get_admin_page():
+        from fastapi.responses import FileResponse
+        # Check both potential locations
+        if os.path.exists("../dashboard/admin.html"):
+            return FileResponse("../dashboard/admin.html")
+        else:
+            return FileResponse("dashboard/admin.html")
+
+@app.post("/api/admin/seed")
+async def seed_test_potholes():
+    # Logic from add_potholes_remote.py
+    potholes_to_add = [
+        {"lat": 28.9521, "lon": 77.1039, "depth": 5.0, "length": 7.0, "width": 7.0},
+        {"lat": 28.9525, "lon": 77.1045, "depth": 5.0, "length": 7.0, "width": 7.0}
+    ]
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    added = []
+    try:
+        for p in potholes_to_add:
+            # Calculate volume
+            volume = p['length'] * p['width'] * p['depth']
+            
+            # Determine severity (simplified logic matches script intent)
+            severity = "Moderate"
+            status = "Orange" # Depth 5.0 is moderate
+            
+            query = """
+            INSERT INTO potholes (latitude, longitude, depth, length, width, volume, profile_data, severity_level, status, detected_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            cursor.execute(query, (
+                p['lat'], p['lon'], p['depth'], p['length'], p['width'], 
+                volume, "[]", severity, status, datetime.now()
+            ))
+            added.append(cursor.lastrowid)
+            
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+        
+    return {"status": "success", "message": f"Added {len(added)} test potholes", "ids": added}
+
+@app.delete("/api/potholes/{pothole_id}")
+async def delete_pothole(pothole_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM potholes WHERE id = ?", (pothole_id,))
+    conn.commit()
+    
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Pothole not found")
+        
+    conn.close()
+    return {"status": "success", "message": f"Pothole {pothole_id} deleted"}
+
+@app.delete("/api/potholes")
+async def delete_all_potholes():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM potholes")
+    conn.commit()
+    conn.close()
+    return {"status": "success", "message": "All potholes deleted"}
 
 if __name__ == "__main__":
     import uvicorn

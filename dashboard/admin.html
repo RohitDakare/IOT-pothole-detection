@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pothole Administration</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .btn-create {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-delete {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .pothole-list {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 1rem;
+        }
+
+        .pothole-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #334155;
+        }
+
+        .pothole-item:last-child {
+            border-bottom: none;
+        }
+
+        .pothole-info {
+            flex: 1;
+        }
+
+        .pothole-id {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .delete-icon {
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Control Panel</h1>
+        
+        <div class="actions">
+            <!-- Button to create test potholes -->
+            <button class="btn-create" onclick="createPotholes()">+ Add Test Potholes</button>
+            
+            <!-- Button to delete ALL test potholes -->
+            <button class="btn-delete" onclick="deleteAllPotholes()">Delete All Potholes</button>
+        </div>
+
+        <div class="pothole-list" id="potholeList">
+            <!-- List will be populated here -->
+            <p style="text-align: center; opacity: 0.5;">Loading potholes...</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        async function fetchPotholes() {
+            try {
+                const res = await fetch(`${API_BASE}/potholes`);
+                const data = await res.json();
+                renderList(data);
+            } catch (err) {
+                console.error("Error fetching potholes:", err);
+            }
+        }
+
+        function renderList(potholes) {
+            const list = document.getElementById('potholeList');
+            if (potholes.length === 0) {
+                list.innerHTML = '<p style="text-align: center; opacity: 0.5;">No potholes found.</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            potholes.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'pothole-item';
+                item.innerHTML = `
+                    <div class="pothole-info">
+                        <span class="pothole-id">#${p.id}</span> - 
+                        ${p.depth}cm Depth | ${p.status}
+                        <br>
+                        <small style="opacity: 0.7">${new Date(p.detected_at).toLocaleString()}</small>
+                    </div>
+                    <div class="delete-icon" onclick="deletePothole(${p.id})">🗑️</div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        async function createPotholes() {
+            if(!confirm("Add 2 test potholes?")) return;
+            try {
+                const res = await fetch(`${API_BASE}/admin/seed`, { method: 'POST' });
+                const data = await res.json();
+                alert(data.message);
+                fetchPotholes();
+            } catch (err) {
+                alert("Failed to add potholes");
+                console.error(err);
+            }
+        }
+
+        async function deletePothole(id) {
+            if(!confirm(`Delete pothole #${id}?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/potholes/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    fetchPotholes();
+                } else {
+                    alert("Failed to delete pothole");
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function deleteAllPotholes() {
+            if(!confirm("Are you sure you want to DELETE ALL potholes? This cannot be undone.")) return;
+            try {
+                const res = await fetch(`${API_BASE}/potholes`, { method: 'DELETE' });
+                if (res.ok) {
+                    alert("All potholes deleted.");
+                    fetchPotholes();
+                } else {
+                    alert("Failed to delete all potholes");
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Initialize
+        fetchPotholes();
+    </script>
+</body>
+</html>

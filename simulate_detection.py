@@ -1,6 +1,7 @@
 import requests
 import time
 import random
+import datetime
 
 API_URL = "http://localhost:8000/api/potholes"
 
@@ -9,9 +10,9 @@ def simulate_real_detection():
     print("Starting Full-Scale System Simulation...")
     
     detections = [
-        {"lat": 19.0760, "lon": 72.8777, "depth": 10.5, "severity": "Critical", "classification": "Major Pothole"},
-        {"lat": 19.0765, "lon": 72.8780, "depth": 4.2, "severity": "Moderate", "classification": "Minor Pothole"},
-        {"lat": 19.0770, "lon": 72.8785, "depth": 1.5, "severity": "Minor", "classification": "Normal Road (Dip)"}
+        {"lat": 28.9521, "lon": 77.1039, "depth": 10.5, "severity": "Critical", "classification": "Major Pothole"},
+        {"lat": 28.9525, "lon": 77.1044, "depth": 4.2, "severity": "Moderate", "classification": "Minor Pothole"},
+        {"lat": 28.9528, "lon": 77.1049, "depth": 1.5, "severity": "Minor", "classification": "Normal Road (Dip)"}
     ]
 
     for det in detections:
@@ -25,7 +26,7 @@ def simulate_real_detection():
             "width": width,
             "severity": det["severity"],
             "classification": det[ "classification"],
-            "timestamp": time.time()
+            "timestamp": datetime.datetime.now().isoformat()
         }
         
         try:
