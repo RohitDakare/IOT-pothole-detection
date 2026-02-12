@@ -365,26 +365,24 @@ if os.path.exists("../dashboard"):
     async def get_3d_map():
         from fastapi.responses import FileResponse
         return FileResponse("../dashboard/3d_map.html")
+    @app.get("/kg/admin")
+    async def get_admin_page():
+        from fastapi.responses import FileResponse
+        return FileResponse("../dashboard/admin.html")
 elif os.path.exists("dashboard"):
     app.mount("/static", StaticFiles(directory="dashboard"), name="static")
     @app.get("/")
     async def get_index():
         from fastapi.responses import FileResponse
         return FileResponse("dashboard/index.html")
-
     @app.get("/3d-map")
     async def get_3d_map():
         from fastapi.responses import FileResponse
         return FileResponse("dashboard/3d_map.html")
-
     @app.get("/kg/admin")
     async def get_admin_page():
         from fastapi.responses import FileResponse
-        # Check both potential locations
-        if os.path.exists("../dashboard/admin.html"):
-            return FileResponse("../dashboard/admin.html")
-        else:
-            return FileResponse("dashboard/admin.html")
+        return FileResponse("dashboard/admin.html")
 
 @app.post("/api/admin/seed")
 async def seed_test_potholes():
